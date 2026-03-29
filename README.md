@@ -32,12 +32,6 @@ A hands-on course that builds up TLS from its cryptographic primitives. Each les
 | 7 | [Encrypted Echo Server](src/bin/7-echo-server.md) | [server](src/bin/7-echo-server.rs) / [client](src/bin/7-echo-client.rs) | Combines lessons 2+4+5 into a working encrypted channel |
 | 8 | [Authenticated Echo Server](src/bin/8-echo-server.md) | [genkey](src/bin/8-genkey.rs) / [server](src/bin/8-echo-server.rs) / [client](src/bin/8-echo-client.rs) | Signs the handshake to prevent MITM (adds lessons 3+6) |
 
-### Phase 4: Real TLS
-
-| # | Topic | Code | Notes |
-|---|-------|------|-------|
-| 9 | Add TLS to the Tunnel | _coming next_ | Use `tokio-rustls` to add real TLS to the UDP-over-TCP tunnel |
-
 ## How it all connects
 
 ```
@@ -54,9 +48,6 @@ Lesson 7: Encrypted channel (DH + HKDF + ChaCha20)
 Lesson 6: Certificates ───►│
                            ▼
 Lesson 8: Authenticated channel (+ signatures + certs)
-                           │
-                           ▼
-Lesson 9: Real TLS (tokio-rustls wraps it all)
 ```
 
 ## Running
