@@ -80,20 +80,20 @@ loop {
 
 ```
 Executor                          Future (CountdownFuture { count: 3 })
-   │                                 │
+   │                                │
    ├── poll() ──────────────────►   │  count=3 → decrement → count=2
    │  ◄── Pending ──────────────────┤  wake_by_ref() → "poll me again"
-   │                                 │
+   │                                │
    ├── poll() ──────────────────►   │  count=2 → decrement → count=1
    │  ◄── Pending ──────────────────┤  wake_by_ref() → "poll me again"
-   │                                 │
+   │                                │
    ├── poll() ──────────────────►   │  count=1 → decrement → count=0
    │  ◄── Pending ──────────────────┤  wake_by_ref() → "poll me again"
-   │                                 │
+   │                                │
    ├── poll() ──────────────────►   │  count=0 → done!
-   │  ◄── Ready(()) ───────────────┤  future is complete
-   │                                 │
-   │  (never poll again)             │
+   │  ◄── Ready(()) ────────────── ─┤  future is complete
+   │                                │
+   │  (never poll again)            │
 ```
 
 ## The contract
@@ -111,8 +111,8 @@ Rule 2 visualized — what happens if you forget to wake:
 
 Executor                          Future
    │                                │
-   ├── poll() ────────────────►    │
-   │  ◄── Pending ─────────────────┤  forgot to call wake()!
+   ├── poll() ────────────────►     │
+   │  ◄── Pending ──────────────────┤  forgot to call wake()!
    │                                │
    │  ... executor waits ...        │  ... future waits ...
    │  ... nobody wakes anybody ...  │  ... nobody wakes anybody ...
@@ -125,17 +125,17 @@ Executor                          Future
 You'll build one from scratch in Lesson 3. For now, the key idea:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Waker = a callback handle                              │
-│                                                         │
-│  waker.wake()      → tells the executor: "re-poll me!"  │
-│  waker.wake_by_ref() → same, without consuming the waker│
+┌──────────────────────────────────────────────────────────┐
+│  Waker = a callback handle                               │
+│                                                          │
+│  waker.wake()      → tells the executor: "re-poll me!"   │
+│  waker.wake_by_ref() → same, without consuming the waker │
 │  waker.clone()     → copy it, store it for later         │
-│                                                         │
+│                                                          │
 │  Internally: a function pointer + data pointer           │
 │  The executor provides the implementation                │
 │  The future just calls .wake() — doesn't know the details│
-└─────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────┘
 ```
 
 For this lesson's exercises, we'll use a **noop waker** — a waker that does nothing when called. This is enough for manual polling in a loop.
