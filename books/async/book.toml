@@ -1,0 +1,15 @@
+[book]
+title = "Async Rust & Tokio Internals"
+authors = ["Saeed"]
+language = "en"
+
+[build]
+build-dir = "../../book-out/async"
+
+[output.html]
+git-repository-url = "https://github.com/its-saeed/learn-by-building"
+site-url = "/learn-by-building/async/"
+
+[output.html.playground]
+editable = true
+runnable = true

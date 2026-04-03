@@ -1,0 +1,15 @@
+[book]
+title = "TLS from Scratch"
+authors = ["Saeed"]
+language = "en"
+
+[build]
+build-dir = "../../book-out/tls"
+
+[output.html]
+git-repository-url = "https://github.com/its-saeed/learn-by-building"
+site-url = "/learn-by-building/tls/"
+
+[output.html.playground]
+editable = true
+runnable = true

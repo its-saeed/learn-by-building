@@ -24,13 +24,16 @@ jobs:
         with:
           mdbook-version: latest
 
-      - name: Build book
-        run: mdbook build
+      - name: Build TLS book
+        run: mdbook build books/tls
+
+      - name: Build Async book
+        run: mdbook build books/async
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: book/out
+          path: book-out
 
   deploy:
     needs: build
