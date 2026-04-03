@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+mio = { version = "1", features = ["os-poll", "net"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
