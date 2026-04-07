@@ -1,8 +1,24 @@
-# Lesson 11: Real TLS with tokio-rustls
+# Lesson 14: Real TLS with tokio-rustls
+
+## Real-life analogy: from hand-built to factory-made
+
+```
+You've been building a car from scratch:
+  Engine (encryption) → Transmission (key exchange) → Brakes (authentication)
+
+Now you walk into a car factory (rustls):
+  "Oh, they do the same thing I did, but with:
+   - Better engineering
+   - Safety testing
+   - Mass production efficiency
+   - Features I didn't think of (session resumption, ALPN, SNI)"
+
+You understand every part because you built one yourself.
+```
 
 ## The payoff
 
-You've built TLS from scratch: key exchange (Lesson 4), key derivation (Lesson 5), encryption (Lesson 2), authentication (Lesson 8), replay defense (Lesson 10). Now use a production TLS library and see how everything maps.
+You've built TLS from scratch: key exchange (Lesson 4), key derivation (Lesson 5), encryption (Lesson 2), authentication (Lesson 12), replay defense (Lesson 12). Now use a production TLS library and see how everything maps.
 
 ## rustls vs OpenSSL
 
@@ -36,14 +52,14 @@ When you call `TlsConnector::connect()`, here's what happens inside:
 
 4. Encrypted application data flows
    → ChaCha20-Poly1305 with counter nonces                                (Lessons 2, 10)
-   → Server authenticated via certificate                                  (Lesson 8)
+   → Server authenticated via certificate                                  (Lesson 12)
 ```
 
 Everything you built by hand — rustls does automatically in ~2ms.
 
 ## The code change
 
-Your Lesson 8 server/client required ~50 lines of handshake code. With tokio-rustls:
+Your Lesson 14 server/client required ~50 lines of handshake code. With tokio-rustls:
 
 **Server:**
 ```rust
@@ -105,7 +121,7 @@ This is how PostgreSQL, Redis, and gRPC add TLS. The application protocol doesn'
 
 ### The difference you can see
 
-Run your Lesson 8 server and capture traffic:
+Run your Lesson 14 server and capture traffic:
 ```sh
 sudo tcpdump -i lo0 port 7878 -w lesson8.pcap
 ```
@@ -115,11 +131,11 @@ Run your Lesson 11 server and capture traffic:
 sudo tcpdump -i lo0 port 7878 -w lesson11.pcap
 ```
 
-Open both in Wireshark. Lesson 8 shows your custom handshake (raw DH keys). Lesson 11 shows a standard TLS 1.3 handshake that Wireshark can parse and label: ClientHello, ServerHello, Certificate, Finished, Application Data.
+Open both in Wireshark. Lesson 12 shows your custom handshake (raw DH keys). Lesson 11 shows a standard TLS 1.3 handshake that Wireshark can parse and label: ClientHello, ServerHello, Certificate, Finished, Application Data.
 
 ## Exercises
 
-### Exercise 1: TLS echo server (implemented in 11-real-tls-server.rs and 11-real-tls-client.rs)
+### Exercise 1: TLS echo server (implemented in 14-real-tls-server.rs and 14-real-tls-client.rs)
 Build an echo server using tokio-rustls. Generate certificates, configure server and client, verify encrypted communication works.
 
 ### Exercise 2: Inspect with openssl s_client
@@ -138,4 +154,4 @@ println!("Cipher: {:?}", server_conn.negotiated_cipher_suite());
 Try configuring the server to only allow ChaCha20-Poly1305 or only AES-GCM and see what gets selected.
 
 ### Exercise 4: Compare with your hand-built TLS
-Run both Lesson 8 and Lesson 11 servers. Use `time` to measure handshake latency. Compare code complexity. Think about what rustls handles that your implementation doesn't: cipher negotiation, session resumption, certificate chain validation, ALPN, SNI, etc.
+Run both Lesson 12 and Lesson 11 servers. Use `time` to measure handshake latency. Compare code complexity. Think about what rustls handles that your implementation doesn't: cipher negotiation, session resumption, certificate chain validation, ALPN, SNI, etc.

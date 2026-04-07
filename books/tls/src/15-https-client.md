@@ -1,4 +1,19 @@
-# Lesson 12: Build a Simple HTTPS Client
+# Lesson 15: HTTPS Client
+
+## Real-life analogy: making a phone call to a business
+
+```
+You call a company:
+  1. You dial the number              → TCP connect to port 443
+  2. Receptionist answers:            → TLS handshake begins
+     "Company X, how can I help?"
+  3. You verify it's really them      → certificate verification
+     (caller ID, security question)
+  4. You have a private conversation  → encrypted HTTP request/response
+  5. You hang up                      → connection close
+```
+
+This lesson: you're building the phone. The network is the phone line. TLS is the encryption. HTTP is the conversation.
 
 ## The full circle
 
@@ -9,7 +24,7 @@ In Lesson 1, you hashed a file. Now you'll connect to a real website over TLS �
 3. The server signed the handshake (Lesson 3/8)
 4. Session keys were derived with HKDF (Lesson 5)
 5. All data is encrypted with AES-GCM or ChaCha20-Poly1305 (Lesson 2)
-6. Each record has a sequence number nonce (Lesson 10)
+6. Each record has a sequence number nonce (Lesson 12)
 7. The hash of the handshake transcript ties it all together (Lesson 1)
 
 ## What HTTPS actually is
@@ -94,7 +109,7 @@ Real HTML, fetched over real TLS, verified against real CA certificates.
 
 ## Exercises
 
-### Exercise 1: HTTPS GET (implemented in 12-https-client.rs)
+### Exercise 1: HTTPS GET (implemented in 15-https-client.rs)
 Connect to `example.com:443` over TLS, send an HTTP GET request, print the response.
 
 ### Exercise 2: Print TLS details

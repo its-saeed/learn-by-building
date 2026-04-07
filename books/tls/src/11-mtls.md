@@ -1,8 +1,23 @@
-# Lesson 9: Mutual TLS (mTLS)
+# Lesson 11: Mutual TLS (mTLS)
 
-## What changes from Lesson 8
+## Real-life analogy: the security checkpoint
 
-In Lesson 8, only the server proves its identity. The client is anonymous — the server has no idea who connected. This is how most HTTPS works: the server proves it's `google.com`, but Google doesn't know who you are (until you log in).
+```
+One-way authentication (Lesson 10):
+  You enter a building.
+  Guard shows you their badge → you trust the building is legit.
+  But the guard doesn't check YOUR badge. Anyone can walk in.
+
+Mutual authentication (this lesson):
+  You enter a building.
+  Guard shows their badge → you verify they're a real guard.
+  You show YOUR badge → guard verifies you're authorized.
+  Both sides proved their identity before any conversation.
+```
+
+## What changes from Lesson 10
+
+In Lesson 10, only the server proves its identity. The client is anonymous — the server has no idea who connected. This is how most HTTPS works: the server proves it's `google.com`, but Google doesn't know who you are (until you log in).
 
 **Mutual TLS** adds client authentication: the client also has a long-term identity key pair and signs its DH public key. Now both sides verify each other before exchanging any data.
 
@@ -27,7 +42,7 @@ Client                                      Server
   │  (derive keys, encrypted communication)   │
 ```
 
-Total handshake: 32 + 32 + 64 + 64 + 32 = **224 bytes** (was 128 in Lesson 8).
+Total handshake: 32 + 32 + 64 + 64 + 32 = **224 bytes** (was 128 in Lesson 10).
 
 ## Real-world scenarios
 
@@ -78,8 +93,8 @@ Pinned key (our implementation):     Certificate (real mTLS):
 
 ## Exercises
 
-### Exercise 1: Mutual authentication (implemented in 9-mtls-server.rs and 9-mtls-client.rs)
-Extend Lesson 8: both sides have identity keys, both sign their DH public keys, both verify. Generate keys with `9-mtls-genkeys.rs`.
+### Exercise 1: Mutual authentication (implemented in 11-mtls-server.rs and 11-mtls-client.rs)
+Extend Lesson 10: both sides have identity keys, both sign their DH public keys, both verify. Generate keys with `11-mtls-genkeys.rs`.
 
 ### Exercise 2: Authorized clients list
 Modify the server to load a list of authorized client public keys from a file. Reject connections from unknown clients. Print which client connected.

@@ -1,8 +1,24 @@
-# Lesson 10: Replay Attack Defense
+# Lesson 12: Replay Attack Defense
+
+## Real-life analogy: the receipt trick
+
+```
+Without replay defense:
+  You pay for dinner. Waiter gives you a receipt.
+  A thief photographs your receipt.
+  Next day, thief shows the receipt: "I already paid, here's proof"
+  Restaurant accepts it — same valid receipt!
+
+With replay defense (sequence numbers):
+  Receipt #001: dinner, $50, 2024-04-07
+  Receipt #002: lunch, $20, 2024-04-08
+  Restaurant tracks: "I've already processed #001"
+  Thief shows #001 again → "Already used. Rejected."
+```
 
 ## The attack
 
-In Lessons 7 and 8, we use random nonces for each message. This prevents nonce reuse, but it doesn't prevent **replay attacks**.
+In Lessons 9 and 10, we use random nonces for each message. This prevents nonce reuse, but it doesn't prevent **replay attacks**.
 
 An attacker records an encrypted message (they don't need to decrypt it). Later, they send the exact same bytes again. The server decrypts it successfully — it's a valid ciphertext with a valid nonce. The server processes the message a second time.
 
@@ -91,11 +107,11 @@ First 4 bytes are zero, last 8 bytes are the big-endian counter. This gives you 
 
 ## Exercises
 
-### Exercise 1: Counter-based encryption (implemented in 10-replay-server.rs and 10-replay-client.rs)
+### Exercise 1: Counter-based encryption (implemented in 12-replay-server.rs and 12-replay-client.rs)
 Replace random nonces with counters. Don't send the nonce on the wire — derive it from the sequence number on both sides.
 
 ### Exercise 2: Demonstrate the attack
-Take the Lesson 8 server (random nonces). Record an encrypted message with `tcpdump`. Replay the raw bytes with a script. Show the server decrypts and processes it again. Then show the Lesson 10 server rejects the replay.
+Take the Lesson 12 server (random nonces). Record an encrypted message with `tcpdump`. Replay the raw bytes with a script. Show the server decrypts and processes it again. Then show the Lesson 12 server rejects the replay.
 
 ### Exercise 3: Out-of-order detection
 Send messages 0, 1, 2, then replay message 1. The receiver should reject it because it already processed sequence 1 and expects sequence 3.
