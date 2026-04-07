@@ -1,8 +1,27 @@
-# Lesson 8: Add Authentication to Secure Channel
+# Lesson 10: Authenticated Echo Server
 
-## The problem with Lesson 7
+## Real-life analogy: the phone call with caller ID
 
-In Lesson 7, we built an encrypted channel. But the client has no way to verify who it's talking to. An attacker (Mallory) can sit between client and server, do separate DH key exchanges with each side, and read all traffic — a **man-in-the-middle attack**.
+```
+Without authentication (Lesson 9):
+  Phone rings: "Hi, this is your bank. What's your account number?"
+  You: "Sure, it's 12345"         ← could be a scammer!
+
+With authentication (this lesson):
+  Phone rings: "Hi, this is your bank"
+  You: "Prove it. What's my security question?"
+  Caller: "Your mother's maiden name is Smith"  ← only the real bank knows
+  You: "OK, I trust you now"
+
+In crypto terms:
+  "Prove it"     = "sign your DH public key"
+  "maiden name"  = the server's Ed25519 private key
+  Verification   = checking the signature against a known public key
+```
+
+## The problem with Lesson 9
+
+In Lesson 9, we built an encrypted channel. But the client has no way to verify who it's talking to. An attacker (Mallory) can sit between client and server, do separate DH key exchanges with each side, and read all traffic — a **man-in-the-middle attack**.
 
 ```
 Client ←──DH──→ Mallory ←──DH──→ Server
@@ -16,7 +35,7 @@ Neither side detects anything.
 
 The server has a **long-term Ed25519 identity key pair** (generated once, stored on disk). The client knows the server's public key in advance. During the handshake, the server signs its ephemeral DH public key with its identity key. The client verifies the signature.
 
-### The protocol (changes from Lesson 7 in bold)
+### The protocol (changes from Lesson 9 in bold)
 
 ```
 Client                                     Server
@@ -30,7 +49,7 @@ Client                                     Server
   │     server_dh_public, signature) **      │
   │  ** → if fails, ABORT **                 │
   │                                          │
-  │  shared = DH(my_secret, their_public)    │  (same as Lesson 7)
+  │  shared = DH(my_secret, their_public)    │  (same as Lesson 9)
   │  derive keys, encrypt/decrypt            │
 ```
 
@@ -62,11 +81,11 @@ You're manually deciding to trust this public key. Once you say "yes", it's save
 WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
 ```
 
-This is exactly what Lesson 8 does — the client has a known server public key and verifies the handshake signature.
+This is exactly what Lesson 10 does — the client has a known server public key and verifies the handshake signature.
 
 ### TLS certificate verification
 
-In real TLS, instead of a hardcoded public key, the server sends a **certificate** (Lesson 6) containing its public key, signed by a CA. The client verifies the certificate chain, extracts the public key, then verifies the handshake signature. Same principle, but with a trust hierarchy instead of a pinned key.
+In real TLS, instead of a hardcoded public key, the server sends a **certificate** (Lesson 7) containing its public key, signed by a CA. The client verifies the certificate chain, extracts the public key, then verifies the handshake signature. Same principle, but with a trust hierarchy instead of a pinned key.
 
 ### WireGuard peer authentication
 
@@ -76,6 +95,40 @@ WireGuard uses the same pattern: each peer has a long-term X25519 key pair (Curv
 
 When you verify "safety numbers" with a Signal contact, you're comparing long-term identity public keys. If the keys match, you know your messages are authenticated and not being intercepted. If Signal shows "safety number changed", the contact's identity key changed — could be a new phone, or could be a MITM.
 
+## Try it yourself
+
+```sh
+# Step 1: generate the server's identity key
+cargo run -p tls --bin 10-genkey
+# Private key saved to server_identity.key
+# Public key: dd8c3c76bf81163f...
+
+# Step 2: start the authenticated server
+cargo run -p tls --bin 10-echo-server
+
+# Step 3: connect with the client (hardcode the public key from step 1)
+cargo run -p tls --bin 10-echo-client
+# "server authenticated" → type messages, see them echoed
+
+# Step 4: test with wrong key — change one hex digit in the client
+# Run again → "server authentication failed!" → connection refused
+```
+
+```sh
+# See SSH doing the same thing:
+# First connection to a new server:
+ssh -v new-server.com 2>&1 | grep -i "host key"
+# "Server host key: ssh-ed25519 SHA256:..."
+# "Are you sure you want to continue connecting?"
+
+# After accepting, it's in known_hosts:
+grep "new-server" ~/.ssh/known_hosts
+
+# If the server's key changes (or MITM):
+# "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!"
+# Same concept as our authenticated echo server.
+```
+
 ## What this does NOT protect against
 
 - **Compromised server**: If the attacker steals the server's private identity key, they can impersonate the server. This is why key storage matters (file permissions, HSMs in production).
@@ -84,23 +137,23 @@ When you verify "safety numbers" with a Signal contact, you're comparing long-te
 
 ## The three binaries
 
-### 8-genkey.rs (run once)
+### 10-genkey.rs (run once)
 Generates an Ed25519 identity key pair. Saves the private key to `server_identity.key`. Prints the public key as hex for the client to use.
 
-### 8-echo-server.rs
-Same as Lesson 7, plus:
+### 10-echo-server.rs
+Same as Lesson 9, plus:
 - Loads the identity private key from `server_identity.key`
 - After sending its DH public key, signs it and sends the 64-byte signature
 
-### 8-echo-client.rs
-Same as Lesson 7, plus:
+### 10-echo-client.rs
+Same as Lesson 9, plus:
 - Has the server's public key hardcoded (or as a CLI argument)
 - After receiving the DH public key and signature, verifies the signature
 - If verification fails, disconnects immediately
 
 ## Comparison with real TLS
 
-| Feature | Lesson 7 | Lesson 8 | TLS 1.3 |
+| Feature | Lesson 9 | Lesson 10 | TLS 1.3 |
 |---------|----------|----------|---------|
 | Key exchange | X25519 | X25519 | X25519 or P-256 |
 | Server auth | None | Ed25519 signature | RSA/ECDSA/Ed25519 via certificate |
@@ -112,8 +165,8 @@ In real TLS, the server signs the entire **handshake transcript** (all messages 
 
 ## Exercises
 
-### Exercise 1: Authenticated echo (implemented in 8-echo-server.rs and 8-echo-client.rs)
-Extend Lesson 7 with server authentication. Generate identity keys, sign the DH public key, verify on the client.
+### Exercise 1: Authenticated echo (implemented in 10-echo-server.rs and 10-echo-client.rs)
+Extend Lesson 9 with server authentication. Generate identity keys, sign the DH public key, verify on the client.
 
 ### Exercise 2: Test with wrong key
 Change one byte of the hardcoded public key in the client. Run it — it should fail with a verification error, proving that authentication works.
