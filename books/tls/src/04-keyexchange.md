@@ -1,5 +1,29 @@
 # Lesson 4: Diffie-Hellman Key Exchange (X25519)
 
+## Real-life analogy: mixing paint
+
+Alice and Bob want to agree on a shared secret color. Eve is watching everything they send.
+
+```
+Public:  Both agree on base color: YELLOW
+
+Alice (secret: RED)              Bob (secret: BLUE)
+  │                                │
+  │ mix RED + YELLOW → ORANGE      │ mix BLUE + YELLOW → GREEN
+  │                                │
+  ├──── sends ORANGE ────────────►│
+  │◄──── sends GREEN ─────────────┤
+  │                                │
+  │ mix GREEN + RED → BROWN        │ mix ORANGE + BLUE → BROWN
+  │                                │
+  └── shared secret: BROWN ────────┘── shared secret: BROWN
+
+Eve sees: YELLOW, ORANGE, GREEN
+Eve CANNOT unmix paint to get BROWN
+```
+
+This is Diffie-Hellman. Replace "colors" with "math" and it's the real thing.
+
 ## The core problem
 
 Alice and Bob want to encrypt their communication (Lesson 2), but they need a shared secret key. They can't send it in plaintext — Eve is watching the network. They can't encrypt it — that requires a key they don't have yet (chicken-and-egg).
@@ -52,6 +76,57 @@ Instead of `g^a mod p`, X25519 uses **elliptic curve point multiplication**:
 
 Same principle, different math. Elliptic curves give equivalent security with much smaller keys (32 bytes vs 2048+ bytes for classic DH).
 
+## Try it yourself
+
+```sh
+# Generate an X25519 key pair with OpenSSL:
+openssl genpkey -algorithm X25519 -out alice_private.pem
+openssl pkey -in alice_private.pem -pubout -out alice_public.pem
+
+openssl genpkey -algorithm X25519 -out bob_private.pem
+openssl pkey -in bob_private.pem -pubout -out bob_public.pem
+
+# Derive the shared secret (Alice's side):
+openssl pkeyutl -derive -inkey alice_private.pem \
+  -peerkey bob_public.pem -out shared_alice.bin
+
+# Derive the shared secret (Bob's side):
+openssl pkeyutl -derive -inkey bob_private.pem \
+  -peerkey alice_public.pem -out shared_bob.bin
+
+# Verify they match:
+xxd shared_alice.bin
+xxd shared_bob.bin
+# Same 32 bytes! Alice and Bob derived the same secret.
+```
+
+```sh
+# See what key exchange a real TLS connection uses:
+echo | openssl s_client -connect google.com:443 2>/dev/null | grep -i "Server Temp Key"
+# Server Temp Key: X25519, 253 bits
+
+# See the full handshake showing key exchange:
+echo | openssl s_client -connect example.com:443 -state 2>&1 | grep -i "key"
+```
+
+```sh
+# Verify DH with Python (small numbers, for learning):
+python3 -c "
+p, g = 23, 5
+a, b = 6, 15  # secrets
+
+A = pow(g, a, p)  # Alice's public: 5^6 mod 23 = 8
+B = pow(g, b, p)  # Bob's public: 5^15 mod 23 = 19
+
+shared_alice = pow(B, a, p)  # 19^6 mod 23 = 2
+shared_bob   = pow(A, b, p)  # 8^15 mod 23 = 2
+
+print(f'Alice public: {A}, Bob public: {B}')
+print(f'Alice shared: {shared_alice}, Bob shared: {shared_bob}')
+print(f'Match: {shared_alice == shared_bob}')
+"
+```
+
 ## Real-world scenarios
 
 ### Alice and Bob establish an encrypted chat session
@@ -81,6 +156,17 @@ The attacker recorded Monday's and Tuesday's encrypted traffic. Can they decrypt
 
 Without ephemeral DH (old RSA key exchange): the attacker uses the long-term key to decrypt ALL past traffic. This is why TLS 1.3 removed RSA key exchange entirely.
 
+```
+With ephemeral DH (TLS 1.3):        Without (old RSA):
+  Mon: DH → key_1 → destroyed         Mon: RSA decrypt → key_1
+  Tue: DH → key_2 → destroyed         Tue: RSA decrypt → key_2
+  Wed: attacker gets long-term key     Wed: attacker gets RSA key
+       ↓                                    ↓
+  Can decrypt Mon traffic? NO           Can decrypt Mon? YES
+  Can decrypt Tue traffic? NO           Can decrypt Tue? YES
+  Keys are gone forever.                All past traffic exposed.
+```
+
 ### WireGuard's Noise protocol
 
 WireGuard uses X25519 for both:
@@ -94,10 +180,23 @@ The handshake does multiple DH operations: static-static, static-ephemeral, ephe
 DH alone does NOT authenticate. Mallory (attacker) can intercept:
 
 ```
-Alice ←DH→ Mallory ←DH→ Bob
+Alice                   Mallory                  Bob
+  │                        │                       │
+  ├── alice_pub ──────────►│                       │
+  │                        ├── mallory_pub1 ──────►│
+  │                        │◄── bob_pub ───────────┤
+  │◄── mallory_pub2 ──────┤                       │
+  │                        │                       │
+  │ shared_AM              │ shared_AM, shared_MB  │ shared_MB
+  │ (Alice↔Mallory)        │ (can read EVERYTHING) │ (Mallory↔Bob)
+  │                        │                       │
+  │ Thinks she's           │ Decrypts, reads,      │ Thinks he's
+  │ talking to Bob         │ re-encrypts, forwards │ talking to Alice
 ```
 
-Mallory does two separate key exchanges. She decrypts Alice's messages, reads them, re-encrypts for Bob. Neither side knows. This is why Lessons 3 and 6 (signatures and certificates) are necessary — they authenticate the DH public keys.
+Mallory does two separate key exchanges. She reads everything. Neither side knows.
+
+This is why Lessons 3 and 7 (signatures and certificates) are necessary — they authenticate the DH public keys.
 
 ## Exercises
 
