@@ -1,4 +1,29 @@
-# Lesson 7: Encrypted Echo Server (no authentication)
+# Lesson 9: Encrypted Echo Server (no authentication)
+
+## Real-life analogy: the walkie-talkie with a scrambler
+
+Imagine two people with walkie-talkies that have a built-in scrambler:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Before talking:                                         │
+│    1. Both press a "pair" button simultaneously           │
+│       (key exchange — they agree on a scramble pattern)  │
+│    2. The scrambler activates                            │
+│                                                          │
+│  During conversation:                                    │
+│    Alice speaks → scrambler garbles it → radio sends     │
+│    Bob's radio receives → unscrambler restores it        │
+│                                                          │
+│  Anyone listening on the same frequency:                 │
+│    Hears only garbled noise. Can't understand a word.    │
+│                                                          │
+│  The catch:                                              │
+│    Anyone could have pressed "pair" with Alice.          │
+│    She doesn't know if it's really Bob. (No auth!)       │
+│    That's what Lesson 10 fixes.                          │
+└──────────────────────────────────────────────────────────┘
+```
 
 ## What we're building
 
@@ -8,7 +33,7 @@ A TCP echo server and client that communicate over an encrypted channel. This co
 2. **Key derivation** (Lesson 5): HKDF to produce two independent keys
 3. **Encrypted messaging** (Lesson 2): ChaCha20-Poly1305 with length-prefixed framing
 
-This is essentially a simplified TLS session — without authentication (that's Lesson 8).
+This is essentially a simplified TLS session — without authentication (that's Lesson 10).
 
 ## The protocol
 
@@ -95,7 +120,39 @@ Alice ←──DH──→ Mallory ←──DH──→ Bob (Server)
 
 Mallory intercepts Alice's public key, does her own DH with Alice (`key_A_M`) and a separate DH with Bob (`key_M_B`). She decrypts Alice's messages with `key_A_M`, reads them, re-encrypts with `key_M_B`, and forwards to Bob.
 
-Lesson 8 fixes this by having the server sign its public key, proving its identity.
+Lesson 10 fixes this by having the server sign its public key, proving its identity.
+
+## Try it yourself
+
+```sh
+# Terminal 1: start the server
+cargo run -p tls --bin 9-echo-server
+
+# Terminal 2: start the client
+cargo run -p tls --bin 9-echo-client
+# Type a message, see it echoed back encrypted.
+```
+
+```sh
+# Capture the traffic to see encryption in action:
+# Terminal 1: capture
+sudo tcpdump -i lo0 port 7878 -w /tmp/echo-encrypted.pcap &
+
+# Terminal 2: run server
+cargo run -p tls --bin 9-echo-server &
+
+# Terminal 3: run client, send a message
+echo "hello secret world" | cargo run -p tls --bin 9-echo-client
+
+# Stop capture
+kill %1
+
+# Inspect — you'll see the DH public keys (plaintext) then encrypted data:
+tcpdump -r /tmp/echo-encrypted.pcap -X 2>/dev/null | head -40
+# First 32 bytes: client's DH public key (readable hex)
+# Next 32 bytes: server's DH public key
+# Everything after: random-looking bytes (encrypted!)
+```
 
 ## Comparison with real TLS
 
@@ -114,7 +171,7 @@ Our protocol is structurally similar to TLS 1.3 — just stripped down to the es
 
 ## Exercises
 
-### Exercise 1: Encrypted echo (implemented in 7-echo-server.rs and 7-echo-client.rs)
+### Exercise 1: Encrypted echo (implemented in 9-echo-server.rs and 9-echo-client.rs)
 Build the server and client as described above. Type messages in the client, see them echoed back.
 
 ### Exercise 2: Graceful disconnection
