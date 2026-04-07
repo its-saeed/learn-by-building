@@ -1,5 +1,22 @@
 # Lesson 5: HMAC and Key Derivation (HKDF)
 
+## Real-life analogy: the master key and the key cutter
+
+A building manager has one **master key** (the DH shared secret). From it, a locksmith cuts separate keys for each door:
+
+```
+Master key (DH shared secret)
+    │
+    ├── cut "office" → Office key     (client → server encryption key)
+    ├── cut "storage" → Storage key   (server → client encryption key)
+    ├── cut "garage" → Garage key     (handshake encryption key)
+    └── cut "mailbox" → Mailbox key   (resumption secret)
+
+Each key opens ONLY its door.
+Losing the office key doesn't compromise the storage room.
+The locksmith (HKDF) makes this possible.
+```
+
 ## The problem
 
 In Lesson 4, you got a 32-byte shared secret via DH. But you need **multiple** independent keys:
@@ -13,17 +30,28 @@ Also, the raw DH shared secret has mathematical structure — it's a point on an
 
 ## HMAC: Hash-based Message Authentication Code
 
-Before HKDF, you need to understand HMAC. It's simple:
+Before HKDF, you need to understand HMAC. It combines a hash function with a secret key:
 
 ```
 HMAC(key, message) = Hash((key ⊕ opad) || Hash((key ⊕ ipad) || message))
 ```
 
-In plain English: hash the message with the key mixed in, twice. The result is a fixed-size tag that proves:
+In plain English: hash the message with the key mixed in, twice.
+
+```
+Plain hash (anyone can compute):       HMAC (needs the secret key):
+┌────────────────────────────────┐     ┌────────────────────────────────┐
+│ SHA-256("transfer $100")       │     │ HMAC(secret, "transfer $100") │
+│ = a1b2c3...                    │     │ = x7y8z9...                    │
+│                                │     │                                │
+│ Attacker can compute this!     │     │ Attacker can't compute this!  │
+│ Can forge checksums.           │     │ Can't forge the tag.           │
+└────────────────────────────────┘     └────────────────────────────────┘
+```
+
+The result is a fixed-size tag that proves:
 1. **Integrity**: the message wasn't modified
 2. **Authenticity**: only someone with the key could produce this tag
-
-Unlike a plain hash, HMAC requires a secret. An attacker can compute `SHA-256("transfer $1000")` but can't compute `HMAC(secret, "transfer $1000")` without the key.
 
 ## HKDF: Extract and Expand
 
@@ -44,6 +72,77 @@ key_2 = HKDF-Expand(PRK, info="server-to-client", length=32)
 ```
 
 Takes the PRK and stretches it into multiple independent keys. The `info` parameter is a label — same PRK with different labels produces completely unrelated keys. You can generate as many keys as you need.
+
+### Visualizing the whole flow
+
+```
+DH shared secret (32 bytes, non-uniform)
+        │
+        ▼
+┌─────────────────────────────────┐
+│  HKDF-Extract(salt, secret)     │  "concentrate the entropy"
+│  = HMAC(salt, secret)           │
+└───────────────┬─────────────────┘
+                │
+                ▼
+         PRK (32 bytes, uniformly random)
+                │
+      ┌─────────┼─────────┐
+      │         │         │
+      ▼         ▼         ▼
+  Expand    Expand    Expand
+  "c2s"     "s2c"     "iv"
+      │         │         │
+      ▼         ▼         ▼
+  key_1     key_2     key_3    (all independent)
+```
+
+## Try it yourself
+
+```sh
+# HMAC with OpenSSL:
+echo -n "hello" | openssl dgst -sha256 -hmac "mysecretkey"
+# HMAC-SHA256 tag — try changing the message or key, output changes completely
+
+# Compare with plain hash (no key):
+echo -n "hello" | openssl dgst -sha256
+# Anyone can compute this — no secret involved
+```
+
+```sh
+# HKDF with Python (the openssl CLI doesn't support HKDF directly):
+python3 -c "
+import hmac, hashlib
+
+# Step 1: Extract
+secret = bytes.fromhex('0102030405060708090a0b0c0d0e0f10')
+salt = b'my-salt'
+prk = hmac.new(salt, secret, hashlib.sha256).digest()
+print(f'PRK: {prk.hex()[:32]}...')
+
+# Step 2: Expand (simplified, one block)
+import struct
+info_c2s = b'client-to-server'
+info_s2c = b'server-to-client'
+key_c2s = hmac.new(prk, info_c2s + struct.pack('B', 1), hashlib.sha256).digest()
+key_s2c = hmac.new(prk, info_s2c + struct.pack('B', 1), hashlib.sha256).digest()
+print(f'c2s key: {key_c2s.hex()[:32]}...')
+print(f's2c key: {key_s2c.hex()[:32]}...')
+print(f'Different? {key_c2s != key_s2c}')
+"
+```
+
+```sh
+# See HKDF in a real TLS connection (requires Wireshark + TLS key log):
+# Set SSLKEYLOGFILE to capture TLS secrets:
+SSLKEYLOGFILE=/tmp/keys.log curl -s https://example.com > /dev/null
+cat /tmp/keys.log
+# You'll see lines like:
+# CLIENT_HANDSHAKE_TRAFFIC_SECRET ...
+# SERVER_HANDSHAKE_TRAFFIC_SECRET ...
+# CLIENT_TRAFFIC_SECRET_0 ...
+# These are all derived via HKDF from the DH shared secret!
+```
 
 ## Real-world scenarios
 
@@ -125,5 +224,12 @@ mac.verify_slice(&tag)?; // Constant-time comparison!
 
 Note: `verify_slice` uses constant-time comparison to prevent timing attacks. Never use `==` to compare MACs.
 
-### Exercise 4: Full pipeline
-Combine Lessons 4 + 5: do a DH key exchange, then derive two keys via HKDF, then encrypt a message with `c2s_key` (Lesson 2) and decrypt with the same key on the "other side". This is the core of what Lesson 7 will build over TCP.
+### Exercise 4: Timing attack awareness
+
+Compare MACs using `==` vs constant-time comparison. Time both with a correct MAC and a MAC that differs only in the last byte. With `==`, the wrong-last-byte MAC takes slightly less time (short-circuits). With `verify_slice`, both take the same time.
+
+This is why `hmac` crate's `verify_slice` matters — an attacker measuring response times can guess the correct MAC byte by byte.
+
+### Exercise 5: Full pipeline
+
+Combine Lessons 4 + 5: do a DH key exchange, then derive two keys via HKDF, then encrypt a message with `c2s_key` (Lesson 2) and decrypt with the same key on the "other side". This is the core of what Lesson 9 will build over TCP.
