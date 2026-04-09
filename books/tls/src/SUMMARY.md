@@ -43,3 +43,7 @@
 - [mTLS Service Mesh](./p9-mtls-service-mesh.md)
 - [TLS Termination Proxy](./p10-tls-proxy.md)
 - [HTTPS Intercepting Proxy](./p11-intercepting-proxy.md)
+
+# Design Challenges
+
+- [Design Challenges](./challenges.md)
