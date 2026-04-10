@@ -11,10 +11,12 @@ struct Cli {
 enum Command {
     /// Generate a TOTP code
     Generate { secret: String },
+    /// Load a TOTP code from a QR code image
+    Load { path: String },
 }
 
 fn decode_secret(secret: &str) -> Vec<u8> {
-    data_encoding::BASE32.decode(secret.as_bytes()).expect("Invalid base32 secret!")
+    data_encoding::BASE32_NOPAD.decode(secret.as_bytes()).expect("Invalid base32 secret!")
 }
 
 fn current_time_step() -> u64 {
@@ -51,6 +53,14 @@ fn generate_totp(secret_base32: &str, time_step: u64) -> u32 {
     truncated % 1_000_000  // 6 digits
 }
 
+fn decode_qr(path: &str) -> String {
+    let img = image::open(path).unwrap().to_luma8();
+    let mut prepared = rqrr::PreparedImage::prepare(img);
+    let grids = prepared.detect_grids();
+    let (_meta, content) = grids[0].decode().unwrap();
+    content  // "otpauth://totp/...?secret=...&algorithm=..."
+}
+
 fn main() {
     let cli = Cli::parse();
     match cli.command {
@@ -59,5 +69,9 @@ fn main() {
             let totp = generate_totp(&secret, step);
             println!("TOTP: {}", totp);
         }
+        Command::Load { path } => {
+            let uri = decode_qr(&path);
+            println!("{uri}")
+        },
     }
 }

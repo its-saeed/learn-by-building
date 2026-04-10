@@ -175,10 +175,36 @@ otpauth://totp/MyService:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyServ
 ```
 otpauth://totp/              ← type (TOTP vs HOTP)
 MyService:alice@example.com  ← label shown in the app
-?secret=JBSWY3DPEHPK3PXP   ← the shared secret (base32)
+?secret=JBSWY3DPEHPK3PXP   ← the shared secret (base32, often unpadded)
 &issuer=MyService            ← company name
 &digits=6                    ← code length (6 or 8)
 &period=30                   ← time step in seconds
+&algorithm=SHA1              ← hash algorithm
+```
+
+Most parameters are **optional**. A real URI often looks like:
+```
+otpauth://totp/ISSUER%3Ausername?secret=MSITKRCX7CVPGFFKHMSSNYL7YB&issuer=ISSUER
+```
+
+Only `secret` is required. Missing parameters use defaults:
+
+```
+Parameter   Default   Notes
+───────────────────────────────────
+secret      (required) base32, often without '=' padding
+algorithm   SHA1       SHA1, SHA256, SHA512
+digits      6          6 or 8
+period      30         seconds
+issuer      (optional) display name in the app
+```
+
+Your parser must handle missing fields with defaults:
+
+```rust
+let algorithm = params.get("algorithm").unwrap_or(&"SHA1".to_string());
+let digits: u32 = params.get("digits").map(|d| d.parse().unwrap()).unwrap_or(6);
+let period: u64 = params.get("period").map(|p| p.parse().unwrap()).unwrap_or(30);
 ```
 
 ```sh
@@ -268,27 +294,47 @@ The shared secret comes as a base32 string. Decode it to raw bytes:
 
 ```rust
 fn decode_secret(secret_base32: &str) -> Vec<u8> {
-    data_encoding::BASE32
+    // Most TOTP URIs strip the base32 padding ('=' signs).
+    // Use BASE32_NOPAD to handle both padded and unpadded secrets.
+    data_encoding::BASE32_NOPAD
         .decode(secret_base32.as_bytes())
         .expect("invalid base32 secret")
 }
+```
+
+**Why `BASE32_NOPAD`?** Base32 normally requires padding to a multiple of 8 characters (e.g., `JBSWY3DPEHPK3PXP=======`). But most TOTP services strip the `=` padding from the `otpauth://` URI. If you use strict `BASE32`, secrets like `MSITKRCX7CVPGFFKHMSSNYL7YB` (26 chars, not a multiple of 8) will fail to decode.
+
+```
+Secret from URI:  MSITKRCX7CVPGFFKHMSSNYL7YB        ← 26 chars, no padding
+BASE32 expects:   MSITKRCX7CVPGFFKHMSSNYL7YB======  ← padded to 32
+BASE32_NOPAD:     accepts both — use this one
 ```
 
 Test it:
 
 ```rust
 fn main() {
+    // Padded secret (some services include padding):
     let secret = decode_secret("JBSWY3DPEHPK3PXP");
     println!("Secret bytes: {:?}", secret);
     println!("Length: {} bytes", secret.len());
-    // Should be 10 bytes: [72, 101, 108, 108, 111, 33, 222, 173, 190, 175]
+
+    // Unpadded secret (most real URIs look like this):
+    let secret2 = decode_secret("MSITKRCX7CVPGFFKHMSSNYL7YB");
+    println!("Secret2 bytes: {:?}", secret2);
+    println!("Length: {} bytes", secret2.len());
 }
 ```
 
 ```sh
-# Verify with Python:
-python3 -c "import base64; print(list(base64.b32decode('JBSWY3DPEHPK3PXP')))"
-# [72, 101, 108, 108, 111, 33, 222, 173, 190, 175]
+# Verify with Python (Python's b32decode also needs padding):
+python3 -c "
+import base64
+# Python needs padding, so we add it:
+secret = 'MSITKRCX7CVPGFFKHMSSNYL7YB'
+padded = secret + '=' * (-len(secret) % 8)
+print(list(base64.b32decode(padded)))
+"
 ```
 
 ### Step 2: Compute the time step
