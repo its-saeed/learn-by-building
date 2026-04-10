@@ -598,3 +598,52 @@ cargo run -p tls --bin p1-totp -- setup --issuer MyApp --account alice@example.c
 ```
 
 This is the full setup flow — you've built a Google Authenticator clone.
+
+### Exercise 6: Import from QR code image
+
+Build a command that reads a QR code image (PNG/JPG), extracts the `otpauth://` URI, parses the secret and parameters, and immediately generates a code:
+
+```sh
+# Someone sends you a QR code screenshot:
+cargo run -p tls --bin p1-totp -- import qr-screenshot.png
+# Parsed: otpauth://totp/GitHub:alice?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&algorithm=SHA1
+# Account: GitHub:alice
+# Algorithm: SHA1
+# Current code: 847293 (expires in 18s)
+```
+
+Use the `image` crate to load the image and `rqrr` to decode the QR code:
+
+```toml
+[dependencies]
+image = "0.25"
+rqrr = "0.8"
+```
+
+```rust
+use image::GenericImageView;
+
+fn decode_qr(path: &str) -> String {
+    let img = image::open(path).unwrap().to_luma8();
+    let mut prepared = rqrr::PreparedImage::prepare(img);
+    let grids = prepared.detect_grids();
+    let (_meta, content) = grids[0].decode().unwrap();
+    content  // "otpauth://totp/...?secret=...&algorithm=..."
+}
+
+fn parse_otpauth_uri(uri: &str) -> (String, String, String) {
+    // Parse: otpauth://totp/Label?secret=XXX&algorithm=SHA1&digits=6&period=30
+    // Return: (label, secret, algorithm)
+    todo!()
+}
+```
+
+This is how password managers import TOTP — they scan the QR screenshot and extract the secret.
+
+**Test it**: take a screenshot of a QR code from any 2FA setup page (or generate one with Exercise 5), save as PNG, and import it.
+
+### Note on SHA-1 in TOTP
+
+You might wonder: isn't SHA-1 broken (Lesson 1)? SHA-1 has known **collision** attacks — you can find two inputs with the same hash. But HMAC-SHA1 is still secure because HMAC doesn't rely on collision resistance. It relies on the hash being a **pseudorandom function**, which SHA-1 still is.
+
+That said, new deployments should prefer SHA-256. The `otpauth://` URI supports `algorithm=SHA256` and `algorithm=SHA512`. Most services still default to SHA-1 for compatibility with older authenticator apps.
