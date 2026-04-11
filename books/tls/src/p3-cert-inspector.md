@@ -2,20 +2,49 @@
 
 > **Prerequisites**: Lesson 7 (Certificates), Lesson 14 (tokio-rustls). Connect to real websites and inspect their TLS certificates.
 
+## Why inspect certificates?
+
+Certificates are the backbone of internet trust. Being able to inspect them is a fundamental skill:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  When you need to inspect certificates                       │
+│                                                              │
+│  DevOps / SRE:                                               │
+│    "Our HTTPS is broken" → is the cert expired?              │
+│    "Users see a warning" → hostname mismatch? wrong chain?   │
+│    "Cert renew failed"   → what's the current expiry?        │
+│                                                              │
+│  Security:                                                   │
+│    "Is this site legit?" → who issued the cert? trusted CA?  │
+│    "MITM detection"      → did the cert fingerprint change?  │
+│    "CT monitoring"       → was a cert issued for my domain?  │
+│                                                              │
+│  Development:                                                │
+│    "mTLS isn't working"  → is the client cert valid?         │
+│    "Self-signed setup"   → are SANs configured correctly?    │
+│    "Testing TLS code"    → what does the server actually send?│
+└──────────────────────────────────────────────────────────────┘
+```
+
 ## What you're building
 
-A CLI tool that connects to any website over TLS, downloads its certificate chain, and displays the details — like a mini `openssl s_client`.
+A CLI tool that connects to any website, downloads its certificate chain, and shows everything — like a mini `openssl s_client` but with cleaner output.
 
 ```sh
 cargo run -p tls --bin p3-cert-inspector -- google.com
 
   google.com:443
   ──────────────
+  Protocol:   TLS 1.3
+  Cipher:     TLS_AES_256_GCM_SHA384
+
   Certificate chain:
     [0] *.google.com
         Issuer:     GTS CA 1C3
         Valid:      2024-10-21 to 2025-01-13
-        Key:        EC (P-256)
+        Expires in: 42 days
+        Key:        ECDSA (P-256)
         SANs:       *.google.com, google.com, *.youtube.com, ...
 
     [1] GTS CA 1C3
@@ -23,52 +52,137 @@ cargo run -p tls --bin p3-cert-inspector -- google.com
         Valid:      2020-08-13 to 2027-09-30
         Key:        RSA (2048 bits)
 
-    [2] GTS Root R1 (trust anchor)
-        Self-signed root CA
-
-  Protocol:   TLS 1.3
-  Cipher:     TLS_AES_256_GCM_SHA384
-  Expires in: 42 days
+  Fingerprint (SHA-256): a1b2c3d4e5f6...
 ```
 
-## What you'll learn
+## The reference tools
 
-This project teaches you to:
-- Establish a TLS connection with `tokio-rustls`
-- Extract certificates from the handshake
-- Parse X.509 certificates with `x509-parser`
-- Display the certificate chain and verify trust
-
-## The reference tool
+Before building our own, see what the standard tools show:
 
 ```sh
-# This is what your tool replaces:
-echo | openssl s_client -connect google.com:443 -showcerts 2>/dev/null | \
+# === openssl s_client — the classic ===
+
+# Full connection info:
+echo | openssl s_client -connect google.com:443 2>/dev/null | head -25
+# CONNECTED(00000003)
+# depth=2 ...
+# depth=1 ...
+# depth=0 ...
+# ---
+# Certificate chain
+#  0 s:CN = *.google.com
+#    i:CN = GTS CA 1C3
+#  1 s:CN = GTS CA 1C3
+#    i:CN = GTS Root R1
+
+# Just the certificate details:
+echo | openssl s_client -connect google.com:443 2>/dev/null | \
   openssl x509 -text -noout | head -30
 
-# Certificate chain:
-echo | openssl s_client -connect google.com:443 2>/dev/null | \
-  grep -E "subject=|issuer=|depth="
-
-# Expiry:
+# Just the dates:
 echo | openssl s_client -connect google.com:443 2>/dev/null | \
   openssl x509 -noout -dates
+# notBefore=Oct 21 08:22:04 2024 GMT
+# notAfter=Jan 13 08:22:03 2025 GMT
 
-# SANs:
+# Just the SANs:
 echo | openssl s_client -connect google.com:443 2>/dev/null | \
   openssl x509 -noout -ext subjectAltName
+
+# Just the fingerprint:
+echo | openssl s_client -connect google.com:443 2>/dev/null | \
+  openssl x509 -noout -fingerprint -sha256
+```
+
+```sh
+# === Test sites with intentional cert problems ===
+
+# Expired cert:
+echo | openssl s_client -connect expired.badssl.com:443 2>/dev/null | \
+  openssl x509 -noout -dates
+# notAfter is in the past!
+
+# Wrong hostname:
+echo | openssl s_client -connect wrong.host.badssl.com:443 2>/dev/null | \
+  openssl x509 -noout -subject -ext subjectAltName
+# Subject doesn't match the hostname
+
+# Self-signed:
+echo | openssl s_client -connect self-signed.badssl.com:443 2>/dev/null | head -5
+# "verify error:num=18:self-signed certificate"
 ```
 
 ## Implementation guide
 
-### Step 1: TLS connection
+### Step 0: Project setup
+
+```sh
+touch tls/src/bin/p3-cert-inspector.rs
+```
+
+Add to `tls/Cargo.toml`:
+
+```toml
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tokio-rustls = "0.26"
+rustls = "0.23"
+webpki-roots = "0.26"
+x509-parser = "0.16"
+clap = { version = "4", features = ["derive"] }
+```
+
+CLI skeleton:
 
 ```rust
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(name = "cert-inspector", about = "Inspect TLS certificates of any website")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Inspect a site's certificate chain
+    Inspect {
+        /// Domain name (e.g., google.com)
+        host: String,
+        /// Port (default: 443)
+        #[arg(long, default_value = "443")]
+        port: u16,
+    },
+    /// Check certificate expiry for multiple domains
+    CheckExpiry {
+        /// Domain names
+        hosts: Vec<String>,
+    },
+}
+
+#[tokio::main]
+async fn main() {
+    let cli = Cli::parse();
+    match cli.command {
+        Command::Inspect { host, port } => todo!(),
+        Command::CheckExpiry { hosts } => todo!(),
+    }
+}
+```
+
+### Step 1: Connect over TLS
+
+```rust
+use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use rustls::{ClientConfig, RootCertStore};
 
-async fn connect(host: &str) -> Result</* TlsStream */> {
+async fn tls_connect(host: &str, port: u16)
+    -> Result<tokio_rustls::client::TlsStream<TcpStream>, Box<dyn std::error::Error>>
+{
+    // Load the system's trusted root CAs
     let mut root_store = RootCertStore::empty();
     root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
@@ -77,97 +191,305 @@ async fn connect(host: &str) -> Result</* TlsStream */> {
         .with_no_client_auth();
 
     let connector = TlsConnector::from(Arc::new(config));
-    let tcp = TcpStream::connect(format!("{host}:443")).await?;
+    let tcp = TcpStream::connect(format!("{host}:{port}")).await?;
     let server_name = host.try_into()?;
     let tls = connector.connect(server_name, tcp).await?;
     Ok(tls)
 }
 ```
 
-### Step 2: Extract certificates
+Test it:
 
 ```rust
-let (_, conn) = tls_stream.get_ref();
-let certs = conn.peer_certificates().unwrap();
-// certs is a Vec<CertificateDer> — DER-encoded X.509 certificates
+#[tokio::main]
+async fn main() {
+    let tls = tls_connect("google.com", 443).await.unwrap();
+    println!("Connected to google.com over TLS!");
+
+    // Extract negotiated parameters:
+    let (_, conn) = tls.get_ref();
+    println!("Protocol: {:?}", conn.protocol_version().unwrap());
+    println!("Cipher:   {:?}", conn.negotiated_cipher_suite().unwrap());
+}
 ```
 
-### Step 3: Parse with x509-parser
+```sh
+cargo run -p tls --bin p3-cert-inspector -- inspect google.com
+# Connected to google.com over TLS!
+# Protocol: TLSv1_3
+# Cipher: TLS13_AES_256_GCM_SHA384
+```
+
+### Step 2: Extract the certificate chain
+
+After the TLS handshake, the peer's certificates are available:
+
+```rust
+let (_, conn) = tls.get_ref();
+let certs = conn.peer_certificates()
+    .expect("server didn't send certificates");
+
+println!("Certificate chain: {} certificates", certs.len());
+```
+
+Each cert is DER-encoded bytes. Let's parse them.
+
+### Step 3: Parse certificates with x509-parser
 
 ```rust
 use x509_parser::prelude::*;
 
-for (i, cert_der) in certs.iter().enumerate() {
-    let (_, cert) = X509Certificate::from_der(cert_der)?;
-    println!("[{i}] {}", cert.subject());
-    println!("    Issuer: {}", cert.issuer());
-    println!("    Valid:  {} to {}", cert.validity().not_before, cert.validity().not_after);
+fn print_cert(index: usize, der: &[u8]) {
+    let (_, cert) = X509Certificate::from_der(der)
+        .expect("failed to parse certificate");
+
+    println!("  [{}] {}", index, cert.subject());
+    println!("      Issuer:  {}", cert.issuer());
+    println!("      Valid:   {} to {}",
+        cert.validity().not_before,
+        cert.validity().not_after);
+
+    // Check if it's a CA certificate
+    if let Some(bc) = cert.basic_constraints().ok().flatten() {
+        if bc.value.ca {
+            println!("      Type:    CA certificate");
+        }
+    }
+
+    // Self-signed?
+    if cert.subject() == cert.issuer() {
+        println!("      Note:    Self-signed (root CA or self-signed cert)");
+    }
 }
 ```
 
-### Step 4: Extract SANs
+Test it:
+
+```sh
+cargo run -p tls --bin p3-cert-inspector -- inspect google.com
+# Certificate chain: 3 certificates
+#   [0] CN=*.google.com
+#       Issuer:  CN=GTS CA 1C3
+#       Valid:   2024-10-21 to 2025-01-13
+#   [1] CN=GTS CA 1C3
+#       Issuer:  CN=GTS Root R1
+#       Valid:   2020-08-13 to 2027-09-30
+#       Type:    CA certificate
+
+# Compare with openssl:
+echo | openssl s_client -connect google.com:443 2>/dev/null | grep -E "s:|i:"
+```
+
+### Step 4: Extract Subject Alternative Names
+
+SANs tell you which domains the certificate covers:
 
 ```rust
-if let Some(san) = cert.subject_alternative_name()? {
-    for name in &san.value.general_names {
-        match name {
-            GeneralName::DNSName(dns) => println!("    SAN: {dns}"),
-            GeneralName::IPAddress(ip) => println!("    SAN: {ip:?}"),
-            _ => {}
+fn print_sans(cert: &X509Certificate) {
+    if let Ok(Some(san_ext)) = cert.subject_alternative_name() {
+        let names: Vec<String> = san_ext.value.general_names.iter()
+            .filter_map(|name| match name {
+                x509_parser::extensions::GeneralName::DNSName(dns) => {
+                    Some(dns.to_string())
+                }
+                x509_parser::extensions::GeneralName::IPAddress(ip) => {
+                    Some(format!("IP:{:?}", ip))
+                }
+                _ => None,
+            })
+            .collect();
+
+        if !names.is_empty() {
+            println!("      SANs:    {}", names.join(", "));
         }
     }
 }
 ```
 
-## Test targets
+```sh
+cargo run -p tls --bin p3-cert-inspector -- inspect google.com
+# ...
+# SANs: *.google.com, google.com, *.youtube.com, youtube.com, ...
+```
+
+### Step 5: Compute days until expiry
+
+```rust
+fn days_until_expiry(cert: &X509Certificate) -> i64 {
+    let not_after = cert.validity().not_after.timestamp();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    (not_after - now) / 86400
+}
+```
+
+```rust
+let days = days_until_expiry(&cert);
+if days < 0 {
+    println!("      ⚠ EXPIRED {} days ago!", -days);
+} else if days < 30 {
+    println!("      ⚠ Expires in {} days (renew soon!)", days);
+} else {
+    println!("      Expires in {} days", days);
+}
+```
+
+### Step 6: Certificate fingerprint
+
+The SHA-256 fingerprint uniquely identifies a certificate (used for pinning):
+
+```rust
+use sha2::{Sha256, Digest};
+
+fn cert_fingerprint(der: &[u8]) -> String {
+    let hash = Sha256::digest(der);
+    hash.iter()
+        .map(|b| format!("{:02X}", b))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+```
 
 ```sh
-# Normal sites:
-cargo run -p tls --bin p3-cert-inspector -- google.com github.com cloudflare.com
-
-# Interesting cases:
-cargo run -p tls --bin p3-cert-inspector -- expired.badssl.com    # expired cert
-cargo run -p tls --bin p3-cert-inspector -- wrong.host.badssl.com # hostname mismatch
-cargo run -p tls --bin p3-cert-inspector -- self-signed.badssl.com # self-signed
-
-# badssl.com provides test endpoints for every TLS edge case
+# Compare with openssl:
+echo | openssl s_client -connect google.com:443 2>/dev/null | \
+  openssl x509 -noout -fingerprint -sha256
+# SHA256 Fingerprint=A1:B2:C3:D4:...
 ```
+
+### Step 7: Batch expiry checker
+
+Check multiple domains at once:
+
+```rust
+async fn check_expiry(hosts: Vec<String>) {
+    for host in &hosts {
+        match tls_connect(host, 443).await {
+            Ok(tls) => {
+                let (_, conn) = tls.get_ref();
+                if let Some(certs) = conn.peer_certificates() {
+                    let (_, cert) = X509Certificate::from_der(&certs[0]).unwrap();
+                    let days = days_until_expiry(&cert);
+                    let status = if days < 0 { "EXPIRED" }
+                        else if days < 30 { "⚠ RENEW SOON" }
+                        else { "✓" };
+                    println!("{:<30} {:>4} days  {}", host, days, status);
+                }
+            }
+            Err(e) => {
+                println!("{:<30} ERROR: {}", host, e);
+            }
+        }
+    }
+}
+```
+
+```sh
+cargo run -p tls --bin p3-cert-inspector -- check-expiry \
+  google.com github.com cloudflare.com expired.badssl.com
+
+# google.com                       62 days  ✓
+# github.com                      198 days  ✓
+# cloudflare.com                  150 days  ✓
+# expired.badssl.com              ERROR: certificate has expired
+```
+
+## Test targets
+
+[badssl.com](https://badssl.com) provides certificates with every kind of problem — perfect for testing:
+
+```sh
+# Working:
+cargo run -p tls --bin p3-cert-inspector -- inspect sha256.badssl.com
+cargo run -p tls --bin p3-cert-inspector -- inspect tls-v1-2.badssl.com
+
+# Broken (your tool should show useful errors):
+cargo run -p tls --bin p3-cert-inspector -- inspect expired.badssl.com
+cargo run -p tls --bin p3-cert-inspector -- inspect wrong.host.badssl.com
+cargo run -p tls --bin p3-cert-inspector -- inspect self-signed.badssl.com
+cargo run -p tls --bin p3-cert-inspector -- inspect untrusted-root.badssl.com
+cargo run -p tls --bin p3-cert-inspector -- inspect revoked.badssl.com
+```
+
+**Tip**: for sites with invalid certs, you'll need to configure rustls to accept them (for inspection only). Create a custom `ServerCertVerifier` that accepts everything:
+
+```rust
+// DANGEROUS — for inspection only, never in production
+struct NoVerify;
+impl rustls::client::danger::ServerCertVerifier for NoVerify {
+    fn verify_server_cert(&self, ...) -> Result<...> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+    // ... implement other required methods
+}
+```
+
+This lets you connect to expired/self-signed sites to inspect their certs.
 
 ## Exercises
 
 ### Exercise 1: Basic inspector
 
-Connect, extract chain, print subject/issuer/validity for each cert. Compare output with `openssl s_client`.
+Connect, extract chain, print subject/issuer/validity/SANs for each cert. Compare your output with `openssl s_client`.
 
-### Exercise 2: Expiry checker
+### Exercise 2: Batch expiry checker
 
-Check multiple domains and report days until expiry:
 ```sh
-cargo run -p tls --bin p3-cert-inspector -- --check-expiry google.com github.com
-# google.com:  62 days remaining ✓
-# github.com: 198 days remaining ✓
+cargo run -p tls --bin p3-cert-inspector -- check-expiry \
+  google.com github.com example.com expired.badssl.com
 ```
 
-### Exercise 3: Certificate pinning check
+Color-code output: green for >30 days, yellow for <30 days, red for expired.
 
-Download a site's certificate, compute its SHA-256 fingerprint. Compare with a known pin. Report if it matches or changed since last check.
+### Exercise 3: Certificate pinning
+
+Download a site's cert, compute SHA-256 fingerprint, save to a JSON file. On subsequent runs, compare the current fingerprint with the saved one. Alert if it changed (possible MITM or cert rotation).
 
 ```sh
-cargo run -p tls --bin p3-cert-inspector -- --pin google.com
-# Fingerprint: SHA-256:a1b2c3d4...
-# Save to pins.json, check again later
+# First run — saves the pin:
+cargo run -p tls --bin p3-cert-inspector -- pin google.com
+# Fingerprint: SHA-256:A1:B2:C3...
+# Saved to pins.json
+
+# Later run — checks the pin:
+cargo run -p tls --bin p3-cert-inspector -- pin google.com
+# Fingerprint: SHA-256:A1:B2:C3... ✓ matches saved pin
+
+# After cert rotation:
+cargo run -p tls --bin p3-cert-inspector -- pin google.com
+# ⚠ FINGERPRINT CHANGED!
+# Old: SHA-256:A1:B2:C3...
+# New: SHA-256:D4:E5:F6...
 ```
 
 ### Exercise 4: JSON output
 
 Add `--json` flag for machine-readable output:
+
+```sh
+cargo run -p tls --bin p3-cert-inspector -- inspect --json google.com
+```
+
 ```json
 {
   "host": "google.com",
-  "chain": [
-    { "subject": "*.google.com", "issuer": "GTS CA 1C3", "expires": "2025-01-13" }
-  ],
+  "port": 443,
   "protocol": "TLS 1.3",
-  "cipher": "TLS_AES_256_GCM_SHA384"
+  "cipher": "TLS_AES_256_GCM_SHA384",
+  "chain": [
+    {
+      "subject": "CN=*.google.com",
+      "issuer": "CN=GTS CA 1C3",
+      "not_before": "2024-10-21",
+      "not_after": "2025-01-13",
+      "days_until_expiry": 62,
+      "sans": ["*.google.com", "google.com", "*.youtube.com"],
+      "fingerprint": "SHA-256:A1:B2:C3:D4..."
+    }
+  ]
 }
 ```
+
+This is useful for monitoring scripts that parse the output programmatically.
