@@ -2,3 +2,5 @@
 *.key
 /book-out/tls/
 /book-out/async/
+*.sig
+*.pub
