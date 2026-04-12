@@ -6,7 +6,21 @@
 
 In Lesson 5, we used HKDF to derive encryption keys from a DH shared secret. That shared secret was 32 random bytes — impossible to guess.
 
-But what if the secret is a **password**? Passwords are:
+But what if the secret is a **password**? This happens more often than you'd think:
+
+```
+When the user IS the key:
+  Password manager    → master password → decrypt vault
+  Encrypted disk      → login password → decrypt drive (FileVault, LUKS, BitLocker)
+  Encrypted ZIP/7z    → password → decrypt files
+  SSH key passphrase  → passphrase → decrypt private key
+  Encrypted backups   → password → decrypt backup (restic, borgbackup)
+  Crypto wallet       → password → decrypt wallet file
+  E2E encrypted notes → password → decrypt your notes (Standard Notes)
+  KeePass             → master password → decrypt password database
+```
+
+In all these cases, there's no DH key exchange, no pre-shared random secret. Just a human's password. And passwords are:
 
 ```
 A random 256-bit key:
