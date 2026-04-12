@@ -2,34 +2,91 @@
 
 > **Prerequisites**: Lesson 7 (Certificates & Trust). You understand what certificates contain and how trust chains work. Now create them in code.
 
-## Real-life analogy: the notary's office
+## Why generate certificates in code?
 
-In Lesson 7, you learned to **read** certificates (like reading a passport). Now you're the notary — you **issue** them.
+In Lesson 7, you used `openssl` on the command line to create certificates. That works for a one-time setup. But what about:
 
 ```
-Passport office (Certificate Authority):
-  1. Applicant proves identity ("I own example.com")
-  2. Officer creates a document (certificate)
-     - Name: example.com
-     - Photo: public key
-     - Issued by: Passport Office
-     - Valid until: 2027-01-01
-  3. Officer stamps and signs it (CA signature)
-  4. Applicant uses the passport everywhere
+Situations where you can't use the openssl CLI:
+  
+  Integration tests:
+    "I need fresh certs every time tests run"
+    → can't ask developers to run openssl manually before each test
+  
+  Dynamic services:
+    "A new microservice spins up and needs a cert immediately"
+    → can't wait for a human to run openssl
+  
+  The intercepting proxy (Project P11):
+    "Client connects to google.com — I need a fake cert for google.com NOW"
+    → must generate a cert in milliseconds, for any domain, on the fly
+  
+  Embedded devices:
+    "IoT device boots up and needs a unique cert"
+    → no openssl installed on the device
+  
+  CI/CD pipelines:
+    "Build server needs TLS certs for staging environment"
+    → must be automated, no manual steps
+```
 
-You're building the passport office.
+In all these cases, you need to generate certificates **programmatically** — from your Rust code, not from a terminal.
+
+## Real-life analogy: printing your own ID badges
+
+```
+Lesson 7 (openssl CLI):
+  You went to the government office.
+  You waited in line.
+  An officer printed your passport.
+  One passport at a time, manual process.
+
+This lesson (rcgen):
+  You bought a badge printer for your company.
+  Your software prints employee badges automatically.
+  New employee joins → badge printed in seconds.
+  No waiting, no manual work, any name/department.
+
+  ┌────────────────────┐     ┌──────────────────────────┐
+  │  Government office │     │  Your badge printer      │
+  │  (openssl CLI)     │     │  (rcgen in Rust)         │
+  │                    │     │                          │
+  │  Manual            │     │  Automatic               │
+  │  One at a time     │     │  Any quantity             │
+  │  Slow              │     │  Instant                  │
+  │  External tool     │     │  Part of your program     │
+  └────────────────────┘     └──────────────────────────┘
 ```
 
 ## What we're building
 
-Instead of using the `openssl` CLI to generate certificates (like in Lesson 7), we'll do it entirely in Rust using the `rcgen` crate.
+A Rust program that creates certificates — the same certificates that `openssl` creates, but from code:
+
+```rust
+// One line to create a self-signed cert:
+let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
+// That's it. Same result as: openssl req -x509 -newkey rsa:2048 ...
+```
+
+## Two types of certificate
+
+There are only two types, and the difference is one flag:
 
 ```
-openssl CLI (Lesson 7):           rcgen (this lesson):
-  openssl req -x509 ...             let cert = generate_simple_self_signed()?;
-  → writes PEM files                → returns DER bytes + key pair
-  → manual, external tool           → programmatic, in your application
+CA certificate (is_ca = true):
+  "I am allowed to sign OTHER certificates"
+  Like a notary — can stamp other documents
+  Usually self-signed (signs itself)
+  Installed in trust stores
+
+Server certificate (is_ca = false):
+  "I am a specific server (e.g., localhost)"
+  Like an employee badge — identifies one entity
+  Signed BY a CA
+  Presented during TLS handshake
 ```
+
+That's the entire difference. A CA cert has `is_ca = true`, which means it can sign other certs. A server cert has `is_ca = false`, which means it can't.
 
 ## The certificate hierarchy
 
@@ -38,22 +95,24 @@ openssl CLI (Lesson 7):           rcgen (this lesson):
 │  Root CA Certificate (self-signed)       │
 │  Subject: "My Root CA"                   │
 │  Issuer:  "My Root CA" (same = self)     │
+│  is_ca:   TRUE ← can sign other certs   │
 │  Key:     CA key pair                    │
-│  Can sign: other certificates (CA:TRUE)  │
 └─────────────────┬────────────────────────┘
-                  │ signs
+                  │ signs (using CA's private key)
                   ▼
 ┌──────────────────────────────────────────┐
 │  Server Certificate                      │
 │  Subject: "localhost"                    │
-│  Issuer:  "My Root CA"                   │
-│  Key:     server key pair                │
-│  Can sign: nothing (CA:FALSE)            │
-│  SANs: localhost, 127.0.0.1              │
+│  Issuer:  "My Root CA" ← who signed me  │
+│  is_ca:   FALSE ← cannot sign other certs│
+│  Key:     server key pair (different!)   │
+│  SANs:    localhost, 127.0.0.1           │
 └──────────────────────────────────────────┘
-```
 
-The root CA signs the server certificate. Clients trust the root CA → they trust the server certificate.
+The CA and server have DIFFERENT key pairs.
+The CA signs the server cert with the CA's private key.
+Clients verify the signature with the CA's public key.
+```
 
 ## rcgen basics
 
@@ -103,15 +162,34 @@ let server_cert = server_params.signed_by(&server_key, &ca_cert, &ca_key)?;
 println!("Server cert (signed by CA):\n{}", server_cert.pem());
 ```
 
-## The full chain
+## How trust works (the full chain)
 
 ```
-Client connects to server:
-  1. Server sends: [server_cert]
-  2. Client checks: who signed server_cert? → "My Root CA"
-  3. Client checks: do I trust "My Root CA"? → looks in trust store
-  4. Client has ca_cert in trust store → YES → connection trusted
+Step 1: You generate a CA cert + server cert (this lesson)
+
+Step 2: You install the CA cert on the CLIENT machine
+  (add to browser trust store, or load in rustls root store)
+
+Step 3: Client connects to server over TLS:
+
+  Server sends:     "Here's my cert: localhost, signed by My Root CA"
+                          │
+  Client asks:      "Do I trust My Root CA?"
+                          │
+  Client checks     ┌─────▼─────────────────────────┐
+  trust store:      │ Trusted CAs:                   │
+                    │   DigiCert         ← no        │
+                    │   Let's Encrypt    ← no        │
+                    │   My Root CA       ← YES! ✓    │
+                    └────────────────────────────────┘
+                          │
+  Client verifies:  Is the signature on the server cert valid?
+                    (verify using My Root CA's public key)
+                          │
+                          ✓ → connection trusted
 ```
+
+Without Step 2 (installing the CA cert), the client would reject the connection — it doesn't know "My Root CA".
 
 ## Try it yourself
 
