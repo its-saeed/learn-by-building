@@ -1,5 +1,19 @@
 # Lesson 7: Certificates and Trust (X.509)
 
+> **Alice's Bookstore — Chapter 7**
+>
+> Alice has encryption, signatures, and key exchange working. Her bookstore seems secure. Then Bob asks her a hard question:
+>
+> *"When a customer visits your site, how do they know it's really YOUR site? Mallory could set up a fake 'Alice's Bookstore' at a similar domain, do a DH key exchange with the customer, and steal their credit card. Encryption doesn't help if you're encrypting to the wrong person."*
+>
+> *"But I can sign things with my key — they can verify it's me!"*
+>
+> *"How does the customer get your public key in the first place? If Mallory intercepts that too, she gives the customer HER public key pretending it's yours. You need a trusted third party — someone the customer already trusts — to vouch for your identity."*
+>
+> *"Like a... passport office?"*
+>
+> *"Exactly. In the internet world, they're called Certificate Authorities."*
+
 ## Real-life analogy: the passport
 
 You arrive at a foreign border. How does the officer know you are who you claim to be?

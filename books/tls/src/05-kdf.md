@@ -1,5 +1,19 @@
 # Lesson 5: HMAC and Key Derivation (HKDF)
 
+> **Alice's Bookstore — Chapter 5**
+>
+> Alice and her customer just agreed on a shared secret using Diffie-Hellman (Lesson 4). Alice is about to use it as the encryption key when Bob stops her:
+>
+> *"Wait. You can't use that one secret for everything. If you use the same key to encrypt data going TO the customer and data coming FROM the customer, an attacker could reflect your own messages back to you."*
+>
+> *"So I need... two keys? From one secret?"*
+>
+> *"Exactly. And in real TLS, you'll need even more — one for the handshake, one for each direction of data, one for session resumption. All from the same shared secret."*
+>
+> *"How do you get multiple keys from one secret?"*
+>
+> *"You run it through a key derivation function. Think of it like a locksmith who cuts many different keys from one master."*
+
 ## Real-life analogy: the master key and the key cutter
 
 A building manager has one **master key** (the DH shared secret). From it, a locksmith cuts separate keys for each door:

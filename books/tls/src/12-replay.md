@@ -1,5 +1,17 @@
 # Lesson 12: Replay Attack Defense
 
+> **Alice's Bookstore — Chapter 12**
+>
+> Alice's encrypted, authenticated bookstore is running smoothly. Then she notices something strange in her logs: a customer named Dave "bought" the same book 47 times in one minute. Dave calls:
+>
+> *"I only clicked 'Buy' once! But I got charged 47 times!"*
+>
+> Bob investigates: *"Mallory recorded the encrypted 'buy book' message from the network. She can't read or modify it — your encryption and authentication are solid. But she can REPLAY it. She sent the exact same encrypted bytes 46 more times, and your server processed each one as a valid purchase."*
+>
+> *"But the messages are encrypted! How can she reuse them?"*
+>
+> *"She doesn't need to understand the message. She just copies the bytes and sends them again. Your server sees valid encryption, valid auth, decrypts it, and processes it. You need sequence numbers — so your server can say 'I already processed message #7, this is a duplicate.'"*
+
 ## Real-life analogy: the receipt trick
 
 ```

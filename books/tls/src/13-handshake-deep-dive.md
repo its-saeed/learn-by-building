@@ -1,5 +1,15 @@
 # Lesson 13: TLS Handshake Deep Dive
 
+> **Alice's Bookstore — Chapter 13**
+>
+> Alice has built her own encrypted, authenticated, replay-proof protocol. It works. But Bob opens Wireshark and compares her handshake with a real HTTPS connection:
+>
+> *"Your protocol does the basics — DH, signatures, encryption. But real TLS 1.3 does so much more in the handshake: cipher negotiation, SNI, ALPN, key schedule, transcript binding... Let me show you what actually happens when a browser connects to your bookstore."*
+>
+> *"Is my protocol wrong?"*
+>
+> *"It's not wrong — it's just a simplified version. Understanding the full handshake will show you why each extra piece exists and what attacks it prevents."*
+
 > **Prerequisites**: Lessons 9-12 (you've built a mini-TLS). Now see how the real TLS 1.3 handshake works.
 
 ## Real-life analogy: the diplomatic meeting

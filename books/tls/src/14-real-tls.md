@@ -1,5 +1,17 @@
 # Lesson 14: Real TLS with tokio-rustls
 
+> **Alice's Bookstore — Chapter 14**
+>
+> Alice looks at her hand-built protocol: DH key exchange, HKDF, ChaCha20-Poly1305, Ed25519 signatures, counter nonces. It works, but...
+>
+> *"Bob, I built this to learn. But should I actually use it in production? I'm worried I missed something — a subtle timing attack, a nonce edge case, some protocol flaw I don't even know about."*
+>
+> *"Absolutely not. Never use your own crypto in production. You built it to understand what happens inside TLS. Now you replace it with a battle-tested library that does the same thing — but has been audited by hundreds of experts."*
+>
+> *"So all that work was for nothing?"*
+>
+> *"No — it was for understanding. When you use tokio-rustls now, you'll know exactly what it's doing under the hood. You won't be cargo-culting. You'll debug TLS issues faster than anyone who never built their own."*
+
 ## Real-life analogy: from hand-built to factory-made
 
 ```

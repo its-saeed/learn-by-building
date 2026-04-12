@@ -1,5 +1,19 @@
 # Lesson 9: Encrypted Echo Server (no authentication)
 
+> **Alice's Bookstore — Chapter 9**
+>
+> Alice now understands all the building blocks: hashing, encryption, signatures, key exchange, key derivation, and certificates. Bob challenges her:
+>
+> *"Let's put it all together. Build an actual encrypted communication channel between your server and a client. Key exchange, then encrypted messages back and forth."*
+>
+> *"So we're building... TLS?"*
+>
+> *"A baby version of it. No certificates yet — just DH key exchange + encryption. We'll add authentication in the next lesson."*
+>
+> *"What happens without authentication?"*
+>
+> *"It works great against Eve — she can't read anything. But Mallory can still pretend to be your server. One problem at a time."*
+
 ## Real-life analogy: the walkie-talkie with a scrambler
 
 Imagine two people with walkie-talkies that have a built-in scrambler:

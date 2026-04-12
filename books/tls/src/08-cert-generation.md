@@ -1,5 +1,17 @@
 # Lesson 8: Certificate Generation (rcgen)
 
+> **Alice's Bookstore — Chapter 8**
+>
+> Alice's bookstore is thriving. She now runs 12 microservices: inventory, payments, shipping, notifications, and more. Each one needs its own TLS certificate.
+>
+> *"I can't run openssl 12 times every time I deploy. And when I add a new service, I have to manually generate a cert, copy it to the right server... it's a nightmare."*
+>
+> Bob: *"You need to generate certificates from code. Your deployment script creates a cert automatically when a new service starts. No manual steps."*
+>
+> *"But can I just... make my own certificates? Don't I need Let's Encrypt?"*
+>
+> *"For internal services — services that talk to each other, not to the public internet — you create your own CA and issue your own certs. You're the passport office for your own company."*
+
 > **Prerequisites**: Lesson 7 (Certificates & Trust). You understand what certificates contain and how trust chains work. Now create them in code.
 
 ## Why generate certificates in code?

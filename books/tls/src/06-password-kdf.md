@@ -1,5 +1,19 @@
 # Lesson 6: Password-Based KDFs (PBKDF2/Argon2)
 
+> **Alice's Bookstore — Chapter 6**
+>
+> Alice's bookstore now has customer accounts. Customers create passwords to log in. One night, Alice gets an email from her hosting provider:
+>
+> *"We detected a breach. An attacker accessed your database."*
+>
+> Alice panics. She stored passwords using SHA-256 — that's a hash, not plaintext, so it should be safe... right? Bob shakes his head:
+>
+> *"SHA-256 is too fast. An attacker with a GPU can try 10 billion passwords per second. Most of your customers use common passwords — they'll be cracked in minutes."*
+>
+> *"But I hashed them! Isn't that enough?"*
+>
+> *"Fast hashing is great when you WANT speed — like in HKDF. But for passwords, speed is the enemy. You need a hash that's intentionally slow."*
+
 > **Prerequisites**: Lesson 5 (HKDF). You understand key derivation — now learn why passwords need a different approach.
 
 ## The core problem: passwords are terrible secrets

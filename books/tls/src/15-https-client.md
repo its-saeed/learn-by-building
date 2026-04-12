@@ -1,5 +1,19 @@
 # Lesson 15: HTTPS Client
 
+> **Alice's Bookstore — Chapter 15 (Finale)**
+>
+> Alice's bookstore is now running on real TLS with tokio-rustls. Bob suggests one final exercise:
+>
+> *"You've been building the server side. Now build the client side — connect to a real website over HTTPS, do the TLS handshake, send an HTTP request, get back HTML. When you see HTML from example.com appear in your terminal, you'll know that every concept from Lessons 1 through 14 just happened in about 50 milliseconds."*
+>
+> Alice builds it. She runs it. HTML appears. She stares at it for a moment.
+>
+> *"Hashing, encryption, signatures, key exchange, key derivation, certificates, authentication, replay defense... all of that just happened?"*
+>
+> *"All of it. In one handshake. And now you understand every layer."*
+>
+> Alice's bookstore is secure. Her customers' credit cards are safe. Eve can't read them. Mallory can't impersonate her. Replayed messages are rejected. The full circle is complete.
+
 ## Real-life analogy: making a phone call to a business
 
 ```

@@ -1,5 +1,19 @@
 # Lesson 10: Authenticated Echo Server
 
+> **Alice's Bookstore — Chapter 10**
+>
+> Alice's encrypted channel from Lesson 9 is working. Customers can communicate securely. Then Mallory strikes:
+>
+> Mallory sets up a fake server at `alices-b00kstore.com` (with zeros instead of o's). When a customer connects, Mallory does her own DH key exchange with them. The customer thinks they're talking to Alice — the connection is encrypted, everything looks fine — but Mallory is reading every message.
+>
+> *"I thought encryption solved this!"*
+>
+> Bob: *"Encryption protects the pipe, but doesn't prove who's on the other end. You need to SIGN your DH public key so the customer can verify it's really you. Mallory can't forge your signature."*
+>
+> *"So the server proves its identity during the handshake?"*
+>
+> *"Exactly. That's authentication."*
+
 ## Real-life analogy: the phone call with caller ID
 
 ```

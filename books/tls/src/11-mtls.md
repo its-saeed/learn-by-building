@@ -1,5 +1,19 @@
 # Lesson 11: Mutual TLS (mTLS)
 
+> **Alice's Bookstore — Chapter 11**
+>
+> Alice's payment provider sends her an email:
+>
+> *"Starting next month, we require mutual TLS for all API calls. Your server must present a client certificate when connecting to our payment API. This proves your server is authorized to process payments."*
+>
+> Alice is confused: *"In Lesson 10, the SERVER proved its identity to the CLIENT. Now the payment provider wants ME — the client — to prove MY identity too?"*
+>
+> Bob: *"That's mutual authentication. Both sides show their badges. The payment provider proves they're the real payment API, and YOU prove you're an authorized merchant. Some random server that finds the API endpoint can't just start processing payments."*
+>
+> *"So both sides sign their DH keys?"*
+>
+> *"Exactly. Both sides have key pairs, both sign, both verify."*
+
 ## Real-life analogy: the security checkpoint
 
 ```
