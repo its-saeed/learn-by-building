@@ -198,7 +198,14 @@ fn sender_handshake(stream: &mut TcpStream, server_pubkey: &[u8; 32])
 fn receiver_handshake(stream: &mut TcpStream, identity_key: &SigningKey)
     -> (ChaCha20Poly1305, ChaCha20Poly1305)
 {
-    // Mirror of sender_handshake
+    // 1. Read client's ephemeral DH public key (32 bytes)
+    // 2. Generate our own ephemeral X25519 DH key pair
+    // 3. Send our DH public key (32 bytes)
+    // 4. Sign our DH public key with identity_key: sign(identity_key, our_dh_public)
+    // 5. Send the signature (64 bytes)
+    // 6. Compute shared secret = DH(our_secret, client_dh_public)
+    // 7. Derive c2s_key and s2c_key via HKDF (same labels as sender!)
+    // Return (c2s_cipher, s2c_cipher)
     todo!("Reuse handshake from Lesson 10")
 }
 ```
