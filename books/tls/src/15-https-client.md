@@ -34,8 +34,8 @@ This lesson: you're building the phone. The network is the phone line. TLS is th
 In Lesson 1, you hashed a file. Now you'll connect to a real website over TLS — using every concept you've learned. When you run this program and see HTML from `example.com`, know that under the hood:
 
 1. Your client and the server exchanged X25519 keys (Lesson 4)
-2. The server's certificate was verified against a CA (Lesson 6)
-3. The server signed the handshake (Lesson 3/8)
+2. The server's certificate was verified against a CA (Lesson 7)
+3. The server signed the handshake (Lessons 3 and 13)
 4. Session keys were derived with HKDF (Lesson 5)
 5. All data is encrypted with AES-GCM or ChaCha20-Poly1305 (Lesson 2)
 6. Each record has a sequence number nonce (Lesson 12)
@@ -83,7 +83,7 @@ For a simple client, `webpki-roots` is easiest.
 Every time you visit a website:
 1. DNS lookup → IP address
 2. TCP connect to port 443
-3. TLS handshake (what you built in Lessons 4-8, plus certificate chain validation from Lesson 6)
+3. TLS handshake (what you built in Lessons 4-8, plus certificate chain validation from Lesson 7)
 4. Send HTTP request through the encrypted tunnel
 5. Receive HTTP response
 6. Render HTML
@@ -120,6 +120,77 @@ Content-Length: 1256
 ```
 
 Real HTML, fetched over real TLS, verified against real CA certificates.
+
+## TLS debugging cookbook
+
+Most TLS bugs are not mysterious. They usually fall into one of a few buckets: name mismatch, expired certificate, untrusted CA, missing intermediate, wrong SNI, protocol mismatch, or a local clock problem.
+
+### Start with curl
+
+```sh
+curl -v https://example.com/
+```
+
+Look for:
+
+```
+* Server certificate:
+*  subject: CN=example.com
+*  start date: ...
+*  expire date: ...
+*  subjectAltName: host "example.com" matched cert's "example.com"
+*  issuer: ...
+*  SSL certificate verify ok.
+```
+
+Common failures:
+
+| Error | Meaning | Fix |
+|---|---|---|
+| `certificate has expired` | The certificate is past `notAfter` | Renew and reload the server |
+| `no alternative certificate subject name matches` | The SAN list does not include the hostname | Issue a cert with the correct DNS/IP SAN |
+| `self signed certificate` | The client does not trust the issuer | Use a public CA or pass/install the private CA |
+| `unable to get local issuer certificate` | The server probably omitted an intermediate | Serve the full certificate chain |
+| `wrong version number` | Client spoke TLS to a plaintext port, or proxy routing is wrong | Check port, scheme, and proxy config |
+
+### Inspect the chain with OpenSSL
+
+```sh
+openssl s_client -connect example.com:443 -servername example.com -showcerts
+```
+
+Use `-servername` deliberately. Without SNI, many shared servers return a default certificate that does not match the hostname.
+
+Check the leaf certificate:
+
+```sh
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | \
+  openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+```
+
+Check verification with an explicit CA file:
+
+```sh
+openssl verify -CAfile ca.crt server.crt
+curl --cacert ca.crt https://localhost:8443/
+```
+
+If `curl -k` works but plain `curl` fails, encryption probably works but authentication does not. Fix trust, hostname, expiry, or chain configuration instead of leaving verification disabled.
+
+### Debug rustls clients
+
+When a `tokio-rustls` client fails, map the error back to the same checks:
+
+| rustls/client symptom | Likely cause |
+|---|---|
+| `InvalidCertificate(Expired)` | Server certificate expired or local clock is wrong |
+| `InvalidCertificate(NotValidForName)` | SNI/hostname does not match certificate SAN |
+| `InvalidCertificate(UnknownIssuer)` | Root CA missing from the client's root store |
+| Handshake fails only by IP address | Certificate has DNS SANs but no IP SAN |
+| Works with `webpki-roots`, fails with native roots | OS trust store differs from Mozilla roots |
+| Works locally, fails in container | Container lacks expected CA bundle or time sync |
+
+For local development, prefer `curl --cacert ca.crt` and a client `RootCertStore` containing your test CA. Avoid disabling verification except when building diagnostic tools like the certificate inspector project.
 
 ## Exercises
 

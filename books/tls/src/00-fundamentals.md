@@ -82,6 +82,16 @@ Authentication check: is this really from the bank, or from an attacker pretendi
 
 **Without authentication**: phishing, man-in-the-middle attacks, impersonation. An attacker sets up a fake bank website — without authentication, your browser can't tell the difference.
 
+## What cryptography does not solve
+
+Cryptography is powerful, but it is not a magic shield around the whole application:
+
+- It does not fix broken application logic. TLS can protect `POST /transfer`, but it cannot decide whether the transfer should be allowed.
+- It does not handle authorization. TLS can prove "this is Alice" or "this is server.example.com"; your app still decides what that identity can do.
+- It does not protect data after decryption. If the server logs plaintext credit card numbers, TLS cannot help.
+- It does not save you if private keys are stolen. Attackers with the key can impersonate you until the key is rotated or revoked.
+- It does not hide all metadata. Observers can still see IP addresses, ports, timing, traffic size, and usually the SNI hostname.
+
 ## Core terminology
 
 ### Plaintext and ciphertext
@@ -103,10 +113,10 @@ plaintext: "hello world"
 
 ### Keys
 
-A key is a secret value that controls encryption and decryption. Without the key, decryption is computationally impossible.
+A key is a value that controls a cryptographic operation. Without the right key, decrypting data or producing valid signatures/MACs should be computationally impossible.
 
 - **Symmetric key**: one key for both encryption and decryption. Both sides must share the same key.
-- **Asymmetric key pair**: two keys — a public key (shared openly) and a private key (kept secret). What one encrypts, only the other can decrypt.
+- **Asymmetric key pair**: two keys — a public key (shared openly) and a private key (kept secret). Depending on the algorithm, key pairs are used for signing/verification, encryption/decryption, or key agreement.
 
 ```
 Symmetric:
@@ -116,9 +126,12 @@ Symmetric:
 
 Asymmetric:
   Bob has: public key (shared) + private key (secret)
-  Alice: encrypt(Bob_public, plaintext) → ciphertext
-  Bob:   decrypt(Bob_private, ciphertext) → plaintext
+  Signature use: Bob signs with Bob_private, Alice verifies with Bob_public
+  Encryption use: Alice encrypts to Bob_public, Bob decrypts with Bob_private
+  Key exchange use: Alice and Bob combine key pairs to derive a shared secret
 ```
+
+TLS 1.3 uses asymmetric cryptography mainly for **signatures** and **key exchange**, then uses fast symmetric encryption for the actual data.
 
 ### Cipher
 
@@ -138,7 +151,19 @@ SHA-256("hello") → 2cf24dba5fb0a30e...  (always 32 bytes)
 SHA-256("hello ") → 98ea6e4f216f2fb4... (completely different)
 ```
 
-Used for: integrity verification, password storage, key derivation, digital signatures.
+Used for: integrity verification, password hashing/KDF schemes, key derivation, digital signatures.
+
+### Encoding vs hashing vs encryption vs signing
+
+These are easy to confuse:
+
+| Operation | Secret key? | Reversible? | Main purpose |
+|-----------|-------------|-------------|--------------|
+| Encoding, e.g. Base64 | No | Yes | Make bytes easier to store or transmit |
+| Hashing, e.g. SHA-256 | No | No | Fingerprint data |
+| MAC, e.g. HMAC-SHA256 | Yes, shared key | No | Prove integrity and shared-key authenticity |
+| Encryption, e.g. ChaCha20-Poly1305 | Yes | Yes, with key | Hide data |
+| Signing, e.g. Ed25519 | Yes, private key | No | Prove who approved data |
 
 ### Nonce
 
@@ -231,11 +256,12 @@ These are different concepts that are often confused:
 - **Authorization** (AuthZ): "What are you allowed to do?" — verifying permissions
   - Example: "user X can read this file but not write to it"
 
-TLS handles **authentication** (proving the server is who it claims to be). It does NOT handle authorization — that's the application's job.
+TLS handles **authentication**. In normal HTTPS, the server proves it is who it claims to be. With mutual TLS (mTLS), the client also presents a certificate and proves its identity. TLS does NOT handle authorization — that's the application's job.
 
 ```
-TLS handshake: "I am server.example.com" (authentication)
-Application:   "User alice can access /admin" (authorization)
+TLS handshake: "I am server.example.com"       (server authentication)
+mTLS:          "I am client certificate alice" (client authentication)
+Application:   "Alice can access /admin"       (authorization)
 ```
 
 ## Trust models
@@ -297,17 +323,16 @@ Eve listens to network traffic. Defeated by encryption (confidentiality).
 ```sh
 # See how easy eavesdropping is on unencrypted traffic:
 # Terminal 1: start a plaintext HTTP server
-python3 -m http.server 8000 &
+python3 -m http.server 8000
 
 # Terminal 2: capture traffic
-sudo tcpdump -i lo0 port 8000 -A 2>/dev/null &
+sudo tcpdump -i lo0 port 8000 -A
 
 # Terminal 3: make a request
 curl http://127.0.0.1:8000/
 
 # tcpdump shows EVERYTHING in plaintext — the full HTTP request and response.
 # This is why HTTPS exists.
-kill %1 %2 2>/dev/null
 ```
 
 ### Man-in-the-middle / MITM (active)
@@ -345,50 +370,37 @@ Every concept in this lesson is happening right now on your machine:
 
 ```sh
 # See a real TLS handshake — every concept in action:
-echo | openssl s_client -connect google.com:443 2>/dev/null | head -20
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | head -20
 # You'll see: certificate chain (authentication), cipher suite (encryption),
 # protocol version, key exchange algorithm
 
 # See WHICH cipher suite was negotiated:
-echo | openssl s_client -connect google.com:443 2>/dev/null | grep "Cipher"
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | grep "Cipher"
 # Example: TLS_AES_256_GCM_SHA384
 # That's: AEAD cipher (AES-GCM) + hash (SHA384)
 
 # See the certificate (authentication):
-echo | openssl s_client -connect google.com:443 2>/dev/null | \
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | \
   openssl x509 -noout -subject -issuer
-# subject: CN = *.google.com  ← who they claim to be
-# issuer: CN = GTS CA 1C3     ← who vouches for them (CA)
+# subject: ... example.com ...  ← who they claim to be
+# issuer: ...                   ← who vouches for them (CA)
 
 # See forward secrecy in action:
-echo | openssl s_client -connect google.com:443 2>/dev/null | grep "Server Temp Key"
-# Server Temp Key: X25519  ← ephemeral DH key exchange = forward secrecy
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | grep -E "Server Temp Key|X25519|ECDH"
+# Output depends on the server, but a TLS 1.3 connection uses ephemeral DH/ECDH keys.
 ```
 
 ```sh
-# See encryption protecting YOUR traffic right now:
-# Capture some HTTPS traffic:
-sudo tcpdump -i en0 -c 10 host google.com and port 443 -w /tmp/tls.pcap 2>/dev/null &
-curl -s https://google.com > /dev/null
-sleep 2 && kill %1 2>/dev/null
+# See HMAC (shared-key integrity):
+printf 'transfer $100' | openssl dgst -sha256 -hmac "shared-secret"
+# Change the message or the key and the tag changes completely.
 
-# Look at the raw bytes — all encrypted:
-tcpdump -r /tmp/tls.pcap -X 2>/dev/null | tail -20
-# You see hex garbage — that's AEAD encryption at work.
-# Without the key, nobody can read it. Not your ISP, not the Wi-Fi owner.
+# See a plain hash for comparison:
+printf 'transfer $100' | shasum -a 256
+# Anyone can compute this hash. Only someone with the shared secret can compute the HMAC.
 ```
 
-```sh
-# See HMAC (integrity) — on your own machine:
-# Your SSH known_hosts uses HMAC to hash hostnames:
-cat ~/.ssh/known_hosts | head -3
-# Some lines start with |1|... — that's HMAC-hashed hostnames
-
-# Package managers verify integrity with hashes:
-# macOS:
-shasum -a 256 $(which ls)
-# The OS verified this hash when the binary was installed
-```
+Optional packet-capture experiment: capture a request to `https://example.com` with `tcpdump` or Wireshark. You will see IP addresses, ports, timing, and packet sizes, but the HTTP request and response body will be encrypted.
 
 ## How TLS uses all of this
 

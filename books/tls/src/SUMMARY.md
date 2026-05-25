@@ -19,7 +19,6 @@
 - [Project: Password Manager Vault](./p3-password-vault.md)
 - [Certificates & Trust (X.509)](./07-certs.md)
 - [Certificate Generation (rcgen)](./08-cert-generation.md)
-- [Project: Certificate Inspector & Scanner](./p4-cert-inspector.md)
 
 # Phase 3: Build a Mini-TLS
 
@@ -34,6 +33,7 @@
 
 - [Real TLS (tokio-rustls)](./14-real-tls.md)
 - [HTTPS Client](./15-https-client.md)
+- [Project: Certificate Inspector & Scanner](./p4-cert-inspector.md)
 - [Project: HTTPS Server](./p6-https-server.md)
 
 # Phase 5: Capstone Projects

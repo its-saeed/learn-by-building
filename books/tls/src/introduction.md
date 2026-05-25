@@ -13,7 +13,7 @@ Phase 1: Cryptographic Building Blocks
 
 Phase 2: Putting Primitives Together
   Key Derivation → Password KDFs → Certificates → Cert Generation
-  + Projects: Certificate Inspector, Password Manager Vault
+  + Project: Password Manager Vault
 
 Phase 3: Build a Mini-TLS
   Encrypted Echo → Authenticated Echo → mTLS → Replay Defense → Handshake Deep Dive
@@ -21,7 +21,7 @@ Phase 3: Build a Mini-TLS
 
 Phase 4: Real TLS
   tokio-rustls → HTTPS Client
-  + Projects: HTTPS Server, TLS Scanner
+  + Projects: Certificate Inspector, TLS Scanner, HTTPS Server
 
 Phase 5: Capstone Projects
   Certificate Authority, mTLS Service Mesh, TLS Proxy, Intercepting Proxy
@@ -44,11 +44,11 @@ Phase 5: Capstone Projects
 **Projects** (11 total):
 - TOTP authenticator (Google Authenticator clone)
 - Signed git commits
-- Certificate inspector (check any website's cert chain)
 - Password manager vault
 - Encrypted file transfer (mini `scp`)
-- HTTPS server
+- Certificate inspector (check any website's cert chain)
 - TLS scanner (probe server configurations)
+- HTTPS server
 - Certificate authority
 - mTLS service mesh
 - TLS termination proxy
