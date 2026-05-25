@@ -16,18 +16,18 @@
 
 Every person has a unique fingerprint. You can't reconstruct a person from their fingerprint, but you can verify "is this the same person?" by comparing prints.
 
-```
-Person      → Fingerprint
-"hello"     → 2cf24dba5fb0a30e...
-Cargo.toml  → 1d3901bae4c11bd5...
-Linux ISO   → e3b0c44298fc1c14...
+| Input | Fingerprint |
+|-------|-------------|
+| `"hello"` | `2cf24dba5fb0a30e...` |
+| `Cargo.toml` | `1d3901bae4c11bd5...` |
+| Linux ISO | `e3b0c44298fc1c14...` |
 
-Properties:
-  ✓ Same person → same fingerprint (deterministic)
-  ✗ Fingerprint → person (one-way, can't reverse)
-  ✓ Twins look alike but have different prints (collision resistant)
-  ✓ Tiny scar → completely different print (avalanche effect)
-```
+| Property | Meaning |
+|----------|---------|
+| Deterministic | Same person, same fingerprint |
+| One-way | Fingerprint does not reconstruct the person |
+| Collision resistant | Twins may look alike, but they have different prints |
+| Avalanche effect | A tiny scar changes the print |
 
 A hash function is a digital fingerprint machine.
 
@@ -37,14 +37,12 @@ A hash function takes **any** input — a single byte, a password, an entire mov
 
 SHA-256 always outputs 256 bits (32 bytes), no matter the input:
 
-```
-Input                          SHA-256 Output
-──────────────────────────────────────────────────────────────────
-"hello"                        2cf24dba5fb0a30e26e83b2ac5b9e29e...
-"hello "  (added a space)      5e3235a8346e5a4585f8c58562f5052...
-""  (empty string)             e3b0c44298fc1c149afbf4c8996fb924...
-(4.7 GB Linux ISO)             a1b2c3d4... (still just 32 bytes)
-```
+| Input | SHA-256 output |
+|-------|----------------|
+| `"hello"` | `2cf24dba5fb0a30e26e83b2ac5b9e29e...` |
+| `"hello "` (added a space) | `5e3235a8346e5a4585f8c58562f5052...` |
+| `""` (empty string) | `e3b0c44298fc1c149afbf4c8996fb924...` |
+| 4.7 GB Linux ISO | `a1b2c3d4...` (still just 32 bytes) |
 
 ## The four properties
 
@@ -62,15 +60,12 @@ echo -n "hello" | shasum -a 256
 
 Given a hash, you **cannot** compute the original input. The only option is brute force — try every possible input until one matches.
 
-```
-Forward (easy):   "hello" → sha256 → 2cf24dba...     ✓ instant
-Reverse (hard):   2cf24dba... → ??? → "hello"         ✗ impossible
+| Direction | Example | Difficulty |
+|-----------|---------|------------|
+| Forward | `"hello"` -> SHA-256 -> `2cf24dba...` | Easy and instant |
+| Reverse | `2cf24dba...` -> ??? -> `"hello"` | Computationally infeasible |
 
-Why? SHA-256 is a series of bit operations (AND, OR, XOR, rotate, add)
-that are easy to compute forward but destroy information.
-It's like mixing paint — easy to mix red + blue → purple,
-impossible to unmix purple → red + blue.
-```
+Why? SHA-256 is a series of bit operations (AND, OR, XOR, rotate, add) that are easy to compute forward but destroy information. It's like mixing paint: easy to mix red + blue -> purple, impossible to unmix purple -> red + blue.
 
 ### 3. Avalanche effect
 
@@ -91,24 +86,14 @@ echo -n "hellp" | shasum -a 256
 
 It's practically impossible to find two different inputs with the same hash. SHA-256 has 2^256 possible outputs (~10^77). Collision search is birthday-bound: you expect to need about 2^128 attempts before a collision becomes likely.
 
-```
-                     How big is 2^256?
-    ┌──────────────────────────────────────────────┐
-    │  Atoms in the universe:     ~10^80           │
-    │  2^256:                     ~10^77           │
-    │                                              │
-    │  For collision search, the practical target  │
-    │  is about 2^128 tries: ~3 × 10^38.           │
-    │                                              │
-    │  If you hashed 1 billion inputs per second   │
-    │  for the entire age of the universe          │
-    │  (13.8 billion years), you'd have tried      │
-    │  ~4 × 10^26 inputs.                          │
-    │                                              │
-    │  That's 0.000...0% of the hash space.        │
-    │  Collision? Not in this universe.             │
-    └──────────────────────────────────────────────┘
-```
+| Quantity | Approximate size |
+|----------|------------------|
+| Atoms in the observable universe | `~10^80` |
+| SHA-256 output space (`2^256`) | `~10^77` |
+| Birthday-bound collision target (`2^128`) | `~3 x 10^38` tries |
+| 1 billion hashes/sec for 13.8 billion years | `~4 x 10^26` tries |
+
+Even at that speed for the entire age of the universe, you would cover effectively 0% of the relevant search space. Collision? Not in this universe.
 
 ## Try it yourself
 
@@ -161,21 +146,17 @@ echo -n "hello" | md5               # MD5:     16 bytes — BROKEN, don't use
 
 You don't need to implement SHA-256, but understanding the structure helps:
 
-```
-Input: "hello" (5 bytes)
-          │
-          ▼
-┌─────────────────────────────┐
-│  Step 1: Padding            │  Add bits so length = multiple of 512 bits
-│  Step 2: Split into blocks  │  One or more 512-bit blocks
-│  Step 3: Initialize state   │  8 variables from √primes: h0..h7
-│  Step 4: 64 rounds of mixing│  Rotate, shift, XOR, add constants
-│  Step 5: Output h0..h7      │  Concatenate → 256-bit hash
-└─────────────────────────────┘
+Input: `"hello"` (5 bytes)
 
-Each round destroys information about the input.
-After 64 rounds, recovering the input is infeasible.
-```
+| Step | What happens |
+|------|--------------|
+| 1. Padding | Add bits so the length is a multiple of 512 bits |
+| 2. Split into blocks | Process one or more 512-bit blocks |
+| 3. Initialize state | Start with 8 variables derived from square roots of primes: `h0..h7` |
+| 4. 64 rounds of mixing | Rotate, shift, XOR, and add constants |
+| 5. Output `h0..h7` | Concatenate the final state into a 256-bit hash |
+
+Each round destroys information about the input. After 64 rounds, recovering the input is infeasible.
 
 ## Real-world uses
 
@@ -207,23 +188,12 @@ Most Git repositories still use SHA-1 object IDs by default. Git also supports S
 
 ### Password storage
 
-```
-WRONG — plaintext:
-  Database: { user: "alice", password: "hunter2" }
-  Attacker leaks DB → all passwords exposed
-
-WRONG — plain SHA-256:
-  Database: { user: "alice", hash: "f52fbd..." }
-  Attacker uses rainbow table → cracked instantly
-
-BETTER — SHA-256 + salt:
-  Database: { user: "alice", salt: "x7k2", hash: "a3f1..." }
-  Rainbow tables fail, but GPU brute force is fast
-
-RIGHT — Argon2 (Lesson 6):
-  Database: { user: "alice", hash: "$argon2id$..." }
-  Intentionally slow → brute force impractical
-```
+| Approach | Stored value | Result |
+|----------|--------------|--------|
+| Plaintext | `{ user: "alice", password: "hunter2" }` | All passwords are exposed if the database leaks |
+| Plain SHA-256 | `{ user: "alice", hash: "f52fbd..." }` | Rainbow tables and fast brute force crack weak passwords quickly |
+| SHA-256 + salt | `{ user: "alice", salt: "x7k2", hash: "a3f1..." }` | Rainbow tables fail, but GPU brute force is still fast |
+| Argon2 (Lesson 6) | `{ user: "alice", hash: "$argon2id$..." }` | Intentionally slow and memory-hard, making brute force impractical |
 
 ### Blockchain (Bitcoin)
 
@@ -244,26 +214,13 @@ for i in range(1000000):
 
 ### How TLS uses hashing
 
-```
-┌────────────────────────────────────────────────────────┐
-│  Hashing in TLS                                        │
-│                                                        │
-│  1. HMAC (Lesson 5)                                    │
-│     Hash + secret key → message authentication         │
-│                                                        │
-│  2. HKDF (Lesson 5)                                    │
-│     Derive encryption keys from shared secret          │
-│                                                        │
-│  3. Handshake transcript (Lesson 13)                   │
-│     Hash ALL handshake messages → detect tampering     │
-│                                                        │
-│  4. Certificate fingerprint                            │
-│     Identify certs by hash → certificate pinning       │
-│                                                        │
-│  5. Finished message                                   │
-│     HMAC of transcript → proves handshake integrity    │
-└────────────────────────────────────────────────────────┘
-```
+| TLS use | What the hash helps do |
+|---------|------------------------|
+| HMAC (Lesson 5) | Hash + secret key -> message authentication |
+| HKDF (Lesson 5) | Derive encryption keys from a shared secret |
+| Handshake transcript (Lesson 13) | Hash all handshake messages to detect tampering |
+| Certificate fingerprint | Identify certificates for pinning |
+| Finished message | HMAC of transcript -> prove handshake integrity |
 
 ## Exercises
 

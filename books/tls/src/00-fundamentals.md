@@ -20,29 +20,20 @@ Before writing any code, you need to understand the vocabulary and core concepts
 
 Imagine you need to send a secret letter across town. Every cryptographic concept maps to a part of this scenario:
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  The Secret Letter Problem                                   │
-│                                                              │
-│  You (Alice) want to send a letter to Bob.                   │
-│  The mail carrier (the network) might read it.               │
-│                                                              │
-│  Confidentiality → put the letter in a locked box            │
-│  Integrity       → seal the box with tamper-evident tape     │
-│  Authentication  → stamp it with your wax seal               │
-│                                                              │
-│  Key             → the key to the locked box                 │
-│  Hash            → a fingerprint of the letter               │
-│  Signature       → your wax seal (only you have the ring)    │
-│  Nonce           → a unique serial number on each box        │
-│  Certificate     → a passport proving you are Alice          │
-│                                                              │
-│  Without these:                                              │
-│    Anyone can read the letter (no confidentiality)           │
-│    Anyone can change the letter (no integrity)               │
-│    Anyone can pretend to be you (no authentication)          │
-└──────────────────────────────────────────────────────────────┘
-```
+You (Alice) want to send a letter to Bob. The mail carrier (the network) might read it.
+
+| Cryptographic concept | Secret-letter analogy |
+|-----------------------|-----------------------|
+| Confidentiality | Put the letter in a locked box |
+| Integrity | Seal the box with tamper-evident tape |
+| Authentication | Stamp it with your wax seal |
+| Key | The key to the locked box |
+| Hash | A fingerprint of the letter |
+| Signature | Your wax seal, made with a ring only you have |
+| Nonce | A unique serial number on each box |
+| Certificate | A passport proving you are Alice |
+
+Without these protections, anyone can read the letter, change it, or pretend to be you.
 
 ## The three goals of cryptography
 
@@ -148,7 +139,7 @@ A fixed-size fingerprint of any data. One-way — you can't reverse it.
 
 ```
 SHA-256("hello") → 2cf24dba5fb0a30e...  (always 32 bytes)
-SHA-256("hello ") → 98ea6e4f216f2fb4... (completely different)
+SHA-256("hello ") → 5e3235a8346e5a45... (completely different)
 ```
 
 Used for: integrity verification, password hashing/KDF schemes, key derivation, digital signatures.
@@ -219,16 +210,14 @@ Attacker (no key):
 
 **MAC vs Signature**: a MAC uses a **symmetric** key (both sides share the same key). A signature uses an **asymmetric** key pair. MAC is faster but doesn't prove *which* key holder created it (both sides have the same key). Signatures prove exactly who signed.
 
-```
-           MAC                    Signature
-           ───                    ─────────
-Key:       shared symmetric key   asymmetric key pair
-Creates:   anyone with the key    only private key holder
-Verifies:  anyone with the key    anyone with the public key
-Proves:    "a key holder made it" "THIS person made it"
-Speed:     fast                   slower
-Used in:   TLS record integrity   TLS handshake authentication
-```
+| Property | MAC | Signature |
+|----------|-----|-----------|
+| Key | Shared symmetric key | Asymmetric key pair |
+| Creates | Anyone with the key | Only the private key holder |
+| Verifies | Anyone with the key | Anyone with the public key |
+| Proves | "A key holder made it" | "This specific private key holder signed it" |
+| Speed | Fast | Slower |
+| Used in TLS | Record integrity | Handshake authentication |
 
 **HMAC**: the most common MAC construction — built from a hash function (e.g., HMAC-SHA256). "Hash-based MAC." Used extensively in TLS for key derivation (HKDF, Lesson 5) and handshake integrity.
 
@@ -258,31 +247,27 @@ These are different concepts that are often confused:
 
 TLS handles **authentication**. In normal HTTPS, the server proves it is who it claims to be. With mutual TLS (mTLS), the client also presents a certificate and proves its identity. TLS does NOT handle authorization — that's the application's job.
 
-```
-TLS handshake: "I am server.example.com"       (server authentication)
-mTLS:          "I am client certificate alice" (client authentication)
-Application:   "Alice can access /admin"       (authorization)
-```
+| Layer | Question answered |
+|-------|-------------------|
+| TLS handshake | "Is this really `server.example.com`?" |
+| mTLS | "Is this really client certificate `alice`?" |
+| Application | "Can Alice access `/admin`?" |
 
 ## Trust models
 
-How do you decide to trust a public key?
+How do you decide to trust a public key? TLS needs an answer because a public key by itself is just bytes. The important question is: **does this key really belong to `example.com`?**
 
-### Direct trust (pinned keys)
-You manually verify and store the public key. Simple but doesn't scale.
-- Example: SSH `known_hosts`, WireGuard peer configuration
+For this book, you only need the map:
 
-### Web of trust
-People vouch for each other's keys. Decentralized but messy.
-- Example: PGP/GPG key signing parties
+| Model | Idea | Example |
+|-------|------|---------|
+| Direct trust / pinning | Store the exact expected key | SSH, WireGuard, certificate pinning |
+| TOFU | Trust the first key, warn on change | SSH `known_hosts` |
+| Certificate authority | A trusted third party signs a cert | HTTPS |
 
-### Certificate authority (CA)
-A trusted third party vouches for public keys by signing certificates. Hierarchical and scalable.
-- Example: HTTPS (Let's Encrypt, DigiCert sign server certificates)
+HTTPS uses the **certificate authority** model. The server sends a certificate containing its public key. A CA signs that certificate to say "this key belongs to this domain." Your browser already trusts a set of root CAs, so it can verify the chain.
 
-### Trust on first use (TOFU)
-Accept the key the first time you see it, alert if it changes.
-- Example: SSH ("The authenticity of host can't be established... continue?")
+Direct trust and TOFU are useful contrasts, but they do not scale to the public web. Certificates get their own lessons later.
 
 ## Forward secrecy
 
@@ -291,7 +276,9 @@ If an attacker records all your encrypted traffic today, and steals your long-te
 - **Without forward secrecy**: Yes. The long-term key decrypts everything.
 - **With forward secrecy**: No. Each session used ephemeral keys that were destroyed. The long-term key can't help.
 
-TLS 1.3 mandates forward secrecy by requiring ephemeral Diffie-Hellman key exchange.
+In modern TLS, the long-term certificate key authenticates the server; it does **not** directly encrypt the session data. The actual traffic keys come from an ephemeral Diffie-Hellman exchange, then get destroyed when the session ends.
+
+TLS 1.3 mandates this by requiring ephemeral Diffie-Hellman key exchange.
 
 ## The cast of characters
 
@@ -307,62 +294,21 @@ Cryptography literature uses standard names:
 
 ## Common attacks
 
-```
-Attack              Who         What they do             Defense
-─────────────────────────────────────────────────────────────────────
-Eavesdropping       Eve         Listens to traffic       Encryption
-Man-in-the-middle   Mallory     Intercepts + modifies    Authentication
-Replay              Mallory     Re-sends old messages    Nonces / sequence #
-Tampering           Mallory     Modifies ciphertext      AEAD / MAC
-Downgrade           Mallory     Forces weak crypto       Signed handshake
-```
+These attacks explain why TLS needs several building blocks. This is only a threat map; later lessons implement the defenses.
 
-### Eavesdropping (passive)
-Eve listens to network traffic. Defeated by encryption (confidentiality).
+| Attack | Who | What they do | Defense |
+|--------|-----|--------------|---------|
+| Eavesdropping | Eve | Listens to traffic | Encryption |
+| Man-in-the-middle | Mallory | Intercepts and modifies | Authentication |
+| Replay | Mallory | Re-sends old messages | Nonces / sequence numbers |
+| Tampering | Mallory | Modifies ciphertext | AEAD / MAC |
+| Downgrade | Mallory | Forces weak crypto | Signed handshake |
 
-```sh
-# See how easy eavesdropping is on unencrypted traffic:
-# Terminal 1: start a plaintext HTTP server
-python3 -m http.server 8000
-
-# Terminal 2: capture traffic
-sudo tcpdump -i lo0 port 8000 -A
-
-# Terminal 3: make a request
-curl http://127.0.0.1:8000/
-
-# tcpdump shows EVERYTHING in plaintext — the full HTTP request and response.
-# This is why HTTPS exists.
-```
-
-### Man-in-the-middle / MITM (active)
-Mallory sits between Alice and Bob, impersonating each to the other. Defeated by authentication.
-
-```
-Alice ←──────→ Mallory ←──────→ Bob
-  "Hi Bob"   →  reads it  →  "Hi Bob"
-  "Hi Alice" ←  reads it  ←  "Hi Alice"
-
-Both think they're talking to each other.
-Mallory reads and modifies everything.
-```
-
-### Replay attack
-Mallory records a valid encrypted message and sends it again later. Defeated by sequence numbers or timestamps.
-
-```
-Alice sends:  "transfer $100" (encrypted, valid)
-Mallory records it.
-... 1 hour later ...
-Mallory sends the same bytes again.
-Server processes it → $100 transferred AGAIN.
-```
-
-### Tampering
-Mallory modifies an encrypted message in transit. Defeated by integrity checks (AEAD, MAC).
-
-### Downgrade attack
-Mallory forces Alice and Bob to use weaker crypto than they'd normally choose. Defeated by signing the handshake negotiation.
+- **Eavesdropping** is passive. Eve only listens. Encryption gives confidentiality.
+- **Man-in-the-middle** is active. Mallory impersonates each side to the other. Certificates and signatures provide authentication.
+- **Replay** means Mallory resends old valid bytes. Nonces, sequence numbers, and protocol state reject duplicates.
+- **Tampering** means Mallory modifies data in transit. AEAD or MACs detect changes.
+- **Downgrade** means Mallory tries to force weaker algorithms. TLS protects the negotiated parameters with the handshake transcript.
 
 ## See it in the real world
 
@@ -404,37 +350,32 @@ Optional packet-capture experiment: capture a request to `https://example.com` w
 
 ## How TLS uses all of this
 
-```
-TLS Handshake:
-  1. Negotiate cipher suite          (which algorithms to use)
-  2. Key exchange (DH)               (confidentiality + forward secrecy)
-  3. Server certificate              (authentication via CA trust model)
-  4. Server signature                (proves server has the private key)
-  5. Key derivation (HKDF)           (derive session keys)
-  6. Finished messages               (integrity of handshake — MAC)
+| TLS part | Step | Purpose |
+|----------|------|---------|
+| Handshake | Negotiate cipher suite | Decide which algorithms to use |
+| Handshake | Key exchange (DH) | Confidentiality + forward secrecy |
+| Handshake | Server certificate | Authentication via the CA trust model |
+| Handshake | Server signature | Prove the server has the private key |
+| Handshake | Key derivation (HKDF) | Derive session keys |
+| Handshake | Finished messages | Integrity of the handshake |
+| Record protocol | AEAD encryption of data | Confidentiality + integrity |
+| Record protocol | Sequence number nonces | Replay defense |
 
-TLS Record Protocol:
-  7. AEAD encryption of data         (confidentiality + integrity)
-  8. Sequence number nonces           (replay defense)
-```
+Every concept maps to a lesson:
 
-```
-Every concept → a lesson:
-
-  Concept              Lesson    What you'll build
-  ──────────────────────────────────────────────────
-  Hash                 1         SHA-256 file hasher
-  Symmetric encryption 2         ChaCha20-Poly1305
-  Signatures           3         Ed25519 sign/verify
-  Key exchange         4         X25519 Diffie-Hellman
-  Key derivation       5         HKDF from shared secret
-  Password KDFs        6         Argon2 / PBKDF2
-  Certificates         7         X.509 parsing
-  Cert generation      8         Build a CA with rcgen
-  Mini-TLS             9-12      Encrypted echo server
-  TLS handshake        13        Protocol deep dive
-  Real TLS             14-15     tokio-rustls + HTTPS
-```
+| Concept | Lesson | What you'll build |
+|---------|--------|-------------------|
+| Hash | 1 | SHA-256 file hasher |
+| Symmetric encryption | 2 | ChaCha20-Poly1305 |
+| Signatures | 3 | Ed25519 sign/verify |
+| Key exchange | 4 | X25519 Diffie-Hellman |
+| Key derivation | 5 | HKDF from shared secret |
+| Password KDFs | 6 | Argon2 / PBKDF2 |
+| Certificates | 7 | X.509 parsing |
+| Cert generation | 8 | Build a CA with rcgen |
+| Mini-TLS | 9-12 | Encrypted echo server |
+| TLS handshake | 13 | Protocol deep dive |
+| Real TLS | 14-15 | `tokio-rustls` + HTTPS |
 
 Every concept in this lesson maps to a specific part of TLS. The following lessons implement each piece in Rust.
 
@@ -489,13 +430,17 @@ Different protocol directions and purposes need separate keys. For example, clie
 
 These three constructions are easy to confuse because they all produce a short tag from a message:
 
-A plain hash has no secret — anyone can compute it. It gives integrity only if the hash is published through a trusted channel, but it does not prove who created it.
+|                  | Hash            | MAC                    | Digital signature        |
+|------------------|-----------------|------------------------|--------------------------|
+| **Key**          | none            | shared symmetric key   | asymmetric key pair      |
+| **Who can produce** | anyone       | anyone with the key    | private key holder only  |
+| **Who can verify**  | anyone       | anyone with the key    | anyone with the public key |
+| **Proves**       | integrity (if hash is trusted) | integrity + "a key holder made it" | integrity + "this specific party signed" |
+| **Non-repudiation** | no          | no (both sides have the key) | yes                   |
+| **Speed**        | fast            | fast                   | slower                   |
+| **Used in TLS**  | transcript, HKDF, HMAC | record integrity (AEAD tag) | handshake authentication |
 
-A MAC uses a shared secret key. Only someone with the key can produce or verify the tag. That gives integrity plus authentication, but both sides share the same key, so either side could have produced it.
-
-A digital signature uses an asymmetric key pair. Only the private key holder can sign, but anyone with the public key can verify. That gives integrity plus non-repudiation — it proves which specific party signed.
-
-TLS uses all three: hashes inside HMAC constructions, MACs for record integrity, and signatures during the handshake to authenticate the server.
+TLS uses all three: hashes inside HMAC and HKDF, MACs inside AEAD for record integrity, and signatures during the handshake to authenticate the server.
 
 </details>
 
