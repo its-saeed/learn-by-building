@@ -41,7 +41,7 @@ SHA-256 always outputs 256 bits (32 bytes), no matter the input:
 Input                          SHA-256 Output
 ──────────────────────────────────────────────────────────────────
 "hello"                        2cf24dba5fb0a30e26e83b2ac5b9e29e...
-"hello "  (added a space)      98ea6e4f216f2fb4b69fff9b3a44842c...
+"hello "  (added a space)      5e3235a8346e5a4585f8c58562f5052...
 ""  (empty string)             e3b0c44298fc1c149afbf4c8996fb924...
 (4.7 GB Linux ISO)             a1b2c3d4... (still just 32 bytes)
 ```
@@ -82,14 +82,14 @@ echo -n "hello" | shasum -a 256
 # 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
 
 echo -n "hellp" | shasum -a 256
-# 1f40fc92da241694750979ee6cf582f2d5d7d28e18335de05abc54d0560e0f53
+# fdd7585e08c4e2afd71dcabdb4636c89d557a3f42db9e2040c8bbd1708aa4ce7
 
-# Completely different! Not a single hex digit in common.
+# Completely different! Almost every hex position changed.
 ```
 
 ### 4. Collision resistant
 
-It's practically impossible to find two different inputs with the same hash. SHA-256 has 2^256 possible outputs — more than atoms in the observable universe (~10^80).
+It's practically impossible to find two different inputs with the same hash. SHA-256 has 2^256 possible outputs (~10^77). Collision search is birthday-bound: you expect to need about 2^128 attempts before a collision becomes likely.
 
 ```
                      How big is 2^256?
@@ -97,9 +97,12 @@ It's practically impossible to find two different inputs with the same hash. SHA
     │  Atoms in the universe:     ~10^80           │
     │  2^256:                     ~10^77           │
     │                                              │
+    │  For collision search, the practical target  │
+    │  is about 2^128 tries: ~3 × 10^38.           │
+    │                                              │
     │  If you hashed 1 billion inputs per second   │
-    │  for the entire age of the universe           │
-    │  (13.8 billion years), you'd have tried       │
+    │  for the entire age of the universe          │
+    │  (13.8 billion years), you'd have tried      │
     │  ~4 × 10^26 inputs.                          │
     │                                              │
     │  That's 0.000...0% of the hash space.        │
@@ -200,6 +203,8 @@ git log --oneline -1
 git hash-object Cargo.toml
 ```
 
+Most Git repositories still use SHA-1 object IDs by default. Git also supports SHA-256 repositories, but `git hash-object` in a normal repo is not showing SHA-256.
+
 ### Password storage
 
 ```
@@ -229,7 +234,8 @@ Find an input where `SHA-256(SHA-256(input))` starts with N zero bits:
 python3 -c "
 import hashlib
 for i in range(1000000):
-    h = hashlib.sha256(f'block-nonce-{i}'.encode()).hexdigest()
+    data = f'block-nonce-{i}'.encode()
+    h = hashlib.sha256(hashlib.sha256(data).digest()).hexdigest()
     if h.startswith('0000'):
         print(f'Found! nonce={i} hash={h}')
         break
@@ -279,7 +285,7 @@ Hash these two strings and compare:
 "The quick brown fox jumps over the lazy dog."
 ```
 
-One period. How many hex digits differ? (All of them.)
+One period. How many hex positions differ? (Almost all of them.)
 
 ### Exercise 3: Hash chain
 
