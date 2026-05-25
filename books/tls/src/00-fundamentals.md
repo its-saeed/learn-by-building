@@ -437,3 +437,106 @@ Every concept → a lesson:
 ```
 
 Every concept in this lesson maps to a specific part of TLS. The following lessons implement each piece in Rust.
+
+## Check your understanding
+
+Use these as self-check questions. Try answering before opening the answer.
+
+<details>
+<summary>Why is encryption alone not enough for secure communication?</summary>
+
+Encryption provides confidentiality: it hides the message content. It does not automatically prove who sent the message, whether the message was modified, or whether an old valid message was replayed. TLS needs authentication, integrity, and replay protection in addition to encryption.
+
+</details>
+
+<details>
+<summary>What is the difference between confidentiality and integrity?</summary>
+
+Confidentiality means an attacker cannot read the data. Integrity means an attacker cannot change the data without detection. Encrypted data can still be tampered with unless the scheme also authenticates it, which is why modern TLS uses AEAD ciphers.
+
+</details>
+
+<details>
+<summary>What does authentication prove in TLS?</summary>
+
+Authentication proves that the peer owns the expected private key. For a normal HTTPS connection, the server presents a certificate and proves possession of the matching private key. The certificate chain links that key to a domain name through a trusted CA.
+
+</details>
+
+<details>
+<summary>Why does TLS use a key exchange instead of just sending an encryption key?</summary>
+
+If Alice sends the encryption key directly, anyone who can read that message can decrypt the session. A Diffie-Hellman style key exchange lets both sides derive the same shared secret without sending the secret itself over the network.
+
+</details>
+
+<details>
+<summary>What is forward secrecy?</summary>
+
+Forward secrecy means that stealing the server's long-term private key later does not decrypt old captured sessions. TLS gets this by using fresh ephemeral key exchange values for each session, then discarding the session secrets.
+
+</details>
+
+<details>
+<summary>Why does TLS derive multiple keys from one shared secret? (covered in Lesson 5)</summary>
+
+Different protocol directions and purposes need separate keys. For example, client-to-server traffic and server-to-client traffic should not reuse the same AEAD key. HKDF turns one shared secret into multiple independent keys with clear labels. You will implement this in Lesson 5.
+
+</details>
+
+<details>
+<summary>What is a MAC, and how is it different from a plain hash or a digital signature?</summary>
+
+These three constructions are easy to confuse because they all produce a short tag from a message:
+
+A plain hash has no secret — anyone can compute it. It gives integrity only if the hash is published through a trusted channel, but it does not prove who created it.
+
+A MAC uses a shared secret key. Only someone with the key can produce or verify the tag. That gives integrity plus authentication, but both sides share the same key, so either side could have produced it.
+
+A digital signature uses an asymmetric key pair. Only the private key holder can sign, but anyone with the public key can verify. That gives integrity plus non-repudiation — it proves which specific party signed.
+
+TLS uses all three: hashes inside HMAC constructions, MACs for record integrity, and signatures during the handshake to authenticate the server.
+
+</details>
+
+<details>
+<summary>What does AEAD give you?</summary>
+
+AEAD means authenticated encryption with associated data. It encrypts the plaintext and also produces an authentication tag. During decryption, tampering is detected before the plaintext is accepted.
+
+</details>
+
+<details>
+<summary>Why can a replay attack work even if the message is encrypted?</summary>
+
+The attacker does not need to understand the message. If the same encrypted bytes are still valid later, the attacker can resend them. Protocols prevent this with sequence numbers, nonces, timestamps, or state that rejects duplicates.
+
+</details>
+
+<details>
+<summary>What is the basic idea of a man-in-the-middle attack?</summary>
+
+Mallory places herself between Alice and Bob, pretending to be Bob to Alice and Alice to Bob. Encryption alone does not stop this if Alice has no way to authenticate Bob's key. Certificates and handshake signatures are what bind the key to the real server identity.
+
+</details>
+
+<details>
+<summary>What does the TLS Finished message protect? (covered in Lesson 13)</summary>
+
+The Finished message authenticates the handshake transcript. It proves both sides saw the same negotiation, certificates, key exchange values, and parameters. If an attacker changed anything during the handshake, the Finished verification fails. You will implement this in Lesson 13 — try reasoning from the concepts in this lesson first.
+
+</details>
+
+<details>
+<summary>What happens if you encrypt two messages with the same key and nonce?</summary>
+
+With a stream cipher or GCM mode, the keystream is derived from the key and nonce together. If the nonce repeats, both messages are XORed against the identical keystream. An attacker who sees both ciphertexts can XOR them together, cancelling the keystream and recovering information about both plaintexts. For GCM specifically, nonce reuse also destroys the authentication tag, enabling forgery. This is why TLS uses a per-record sequence number as the nonce — it is strictly monotonic and never repeats.
+
+</details>
+
+<details>
+<summary>Which TLS properties protect against passive and active attackers?</summary>
+
+Encryption protects against passive eavesdropping. Authentication, integrity checks, transcript binding, and replay defenses protect against active attackers who modify, impersonate, downgrade, or resend messages.
+
+</details>

@@ -320,3 +320,98 @@ println!("{:.0} hashes/sec", 1_000_000.0 / start.elapsed().as_secs_f64());
 ```
 
 Compare with `openssl speed sha256`. This shows why SHA-256 is too fast for passwords (Lesson 6).
+
+## Check your understanding
+
+Use these as self-check questions. Try answering before opening the answer.
+
+<details>
+<summary>What does SHA-256 output, no matter how large the input is?</summary>
+
+SHA-256 always outputs 256 bits, which is 32 bytes. In hex, that is 64 hex characters because each hex character represents 4 bits.
+
+</details>
+
+<details>
+<summary>Why does `echo "hello"` hash differently from `echo -n "hello"`?</summary>
+
+Plain `echo` appends a newline byte. `echo -n` does not. Hash functions process exact bytes, so `hello` and `hello\n` are different inputs and produce different hashes.
+
+</details>
+
+<details>
+<summary>If two files have the same SHA-256 hash, what do we assume in practice?</summary>
+
+We assume the files are the same, because finding a SHA-256 collision is computationally infeasible with current knowledge and hardware. Strictly speaking, collisions must exist because infinitely many inputs map to a fixed-size output, but finding one is the hard part.
+
+</details>
+
+<details>
+<summary>Can you reconstruct a file from its SHA-256 hash?</summary>
+
+No. A cryptographic hash is one-way. The digest is only 32 bytes, so it cannot contain enough information to reconstruct arbitrary input data. The only practical attack is guessing candidate inputs and hashing them until one matches.
+
+</details>
+
+<details>
+<summary>Why is SHA-256 useful for file downloads?</summary>
+
+The publisher can publish the expected hash. After downloading, you hash your local file and compare. If the hashes match, the file is very likely identical to the publisher's file. If they differ, the file changed or was corrupted.
+
+</details>
+
+<details>
+<summary>Does a matching download hash prove who published the file?</summary>
+
+Not by itself. It proves the file matches the hash you checked. If an attacker can replace both the file and the hash on the website, the check still passes. Authenticity needs a trusted channel, signature, certificate, or another way to trust the published hash.
+
+</details>
+
+<details>
+<summary>What is the avalanche effect?</summary>
+
+A tiny input change, even one bit, should make the digest look completely unrelated. About half the output bits should change on average. This prevents small input changes from producing predictable hash changes.
+
+</details>
+
+<details>
+<summary>What is the difference between preimage resistance and collision resistance?</summary>
+
+Preimage resistance means that given a hash, it is hard to find any input with that hash. Collision resistance means it is hard to find any two different inputs with the same hash. They are related, but they are different attack goals.
+
+</details>
+
+<details>
+<summary>Why is plain SHA-256 bad for password storage?</summary>
+
+SHA-256 is intentionally fast — that is a feature for integrity checks, but a disaster for passwords. A modern GPU can compute billions of SHA-256 hashes per second. A typical password space (8 characters, common patterns) can be exhausted in minutes. Password storage needs a deliberately slow construction such as Argon2id, bcrypt, or scrypt, where the cost is tunable and brute-forcing millions of guesses per second is made impractical by design.
+
+</details>
+
+<details>
+<summary>What does a salt do for password hashing?</summary>
+
+A salt makes the same password hash differently for different users or records. This defeats precomputed rainbow tables and prevents attackers from seeing that two users chose the same password. A salt does not make fast SHA-256 sufficient by itself.
+
+</details>
+
+<details>
+<summary>Why does Git use hashes for objects?</summary>
+
+The hash identifies the exact content of a blob, tree, or commit. If the content changes, the object ID changes. This lets Git detect changes and link history together by content.
+
+</details>
+
+<details>
+<summary>How does TLS use hashes beyond simple file integrity?</summary>
+
+TLS uses hashes inside HMAC, HKDF, certificate fingerprints, transcript hashes, and Finished-message verification. In TLS, hashes are usually part of a larger construction that also includes keys or protocol context.
+
+</details>
+
+<details>
+<summary>What does HMAC add to a plain hash?</summary>
+
+HMAC wraps a hash function with a secret key. The construction is roughly: hash the message twice — once with the key mixed into the inner input, once with it mixed into the outer input. This prevents length-extension attacks that would affect a naive hash(key || message) construction. The result is a MAC: it cannot be produced or verified without the key, so it gives both integrity and authentication. HMAC-SHA256 is what TLS uses inside HKDF for key derivation.
+
+</details>
